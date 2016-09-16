@@ -72,6 +72,19 @@ static void src_rcon_random_id(src_rcon_message_t *m)
 #endif
 }
 
+static int src_rcon_body(src_rcon_message_t *m, char const *body)
+{
+    free(m->body);
+    m->body = NULL;
+
+    m->body = (uint8_t*)strdup(body);
+    if (m->body == NULL) {
+        return -1;
+    }
+
+    return 0;
+}
+
 src_rcon_message_t *src_rcon_command(char const *cmd)
 {
     src_rcon_message_t *msg = NULL;
@@ -82,8 +95,7 @@ src_rcon_message_t *src_rcon_command(char const *cmd)
     }
 
     msg->type = serverdata_command;
-    msg->body = (uint8_t*)strdup(cmd);
-    if (msg->body == NULL) {
+    if (src_rcon_body(msg, cmd)) {
         src_rcon_free(msg);
         return NULL;
     }
@@ -124,8 +136,7 @@ src_rcon_message_t *src_rcon_auth(char const *password)
     }
 
     msg->type = serverdata_auth;
-    msg->body = (uint8_t*)strdup(password);
-    if (msg->body == NULL) {
+    if (src_rcon_body(msg, password)) {
         src_rcon_free(msg);
         return NULL;
     }
@@ -243,6 +254,7 @@ int src_rcon_deserialize(src_rcon_message_t ***msg, size_t *off,
         }
 
         bufsize = m->size - sizeof(m->id) - sizeof(m->type) - sizeof(m->null);
+        free(m->body);
         m->body = calloc(1, bufsize+1);
         if (m->body == NULL) {
             src_rcon_free(m);
