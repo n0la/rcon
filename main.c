@@ -7,6 +7,7 @@
 #include <getopt.h>
 #include <string.h>
 #include <errno.h>
+#include <ctype.h>
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -128,30 +129,139 @@ static int recv_messages(int sock, src_rcon_message_t ***msgs)
 
 }
 
-int main(int ac, char **av)
+static int send_command(int sock, char const *cmd)
 {
-    struct addrinfo *info = NULL, *ai = NULL;
-    char *c = NULL;
-    size_t size = 0;
-    FILE *cmd = NULL;
-    src_rcon_message_t *auth = NULL;
-    src_rcon_message_t **authanswers = NULL;
     src_rcon_message_t *command = NULL;
     src_rcon_message_t **commandanswers = NULL;
     src_rcon_message_t **p = NULL;
+    int ec = -1;
+
+    /* Send command
+     */
+    command = src_rcon_command(cmd);
+    if (command == NULL) {
+        goto cleanup;
+    }
+
+    if (send_message(sock, command)) {
+        goto cleanup;
+    }
+
+    if (recv_messages(sock, &commandanswers)) {
+        goto cleanup;
+    }
+
+    if (!src_rcon_command_valid(command, commandanswers)) {
+        goto cleanup;
+    }
+
+    if (commandanswers[1] == NULL) {
+
+        src_rcon_freev(commandanswers);
+        commandanswers = NULL;
+
+        if (recv_messages(sock, &commandanswers)) {
+            goto cleanup;
+        }
+
+        p = commandanswers;
+    } else {
+        p = &commandanswers[1];
+    }
+
+    for (; *p != NULL; p++) {
+        fprintf(stdout, "%s", (char const*)(*p)->body);
+        fflush(stdout);
+    }
+
+    ec = 0;
+
+cleanup:
+
+    src_rcon_free(command);
+    src_rcon_freev(commandanswers);
+
+    return ec;
+}
+
+static int handle_arguments(int sock, int ac, char **av)
+{
+    char *c = NULL;
+    size_t size = 0;
+    FILE *cmd = NULL;
+    int i = 0;
+
+    cmd = open_memstream(&c, &size);
+    if (cmd == NULL) {
+        return -1;
+    }
+
+    for (i = 0; i < ac; i++) {
+        if (i > 0) {
+            fputc(' ', cmd);
+        }
+        fprintf(cmd, "%s", av[i]);
+    }
+    fclose(cmd);
+
+    if (send_command(sock, c)) {
+        free(c);
+        return -1;
+    }
+
+    free(c);
+
+    return 0;
+}
+
+static int handle_stdin(int sock)
+{
+    char *line = NULL;
+    size_t sz = 0;
+    int read = 0;
+    int ec = 0;
+
+    while ((read = getline(&line, &sz, stdin)) != -1) {
+        char *cmd = line;
+
+        /* Strip away \n
+         */
+        line[read-1] = '\0';
+
+        while (*cmd != '\0' && isspace(*cmd)) {
+            ++cmd;
+        }
+
+        /* Comment or empty line
+         */
+        if (cmd[0] == '\0' || cmd[0] == '#') {
+            continue;
+        }
+
+        if (send_command(sock, cmd)) {
+            ec = -1;
+            break;
+        }
+    }
+
+    free(line);
+
+    return ec;
+}
+
+int main(int ac, char **av)
+{
+    struct addrinfo *info = NULL, *ai = NULL;
+    src_rcon_message_t *auth = NULL;
+    src_rcon_message_t **authanswers = NULL;
     int sock = 0;
-    int ret = 0, i = 0;
+    int ret = 0;
     int ec = 3;
 
     parse_args(ac, av);
 
     ac -= optind;
     av += optind;
-
-    if (ac < 1) {
-        fprintf(stderr, "No command given\n");
-        return 1;
-    }
 
     if (host == NULL || port == NULL) {
         fprintf(stderr, "No host and/or port specified\n");
@@ -205,68 +315,23 @@ int main(int ac, char **av)
         }
     }
 
-    cmd = open_memstream(&c, &size);
-    if (cmd == NULL) {
-        goto cleanup;
-    }
-
-    for (i = 0; i < ac; i++) {
-        if (i > 0) {
-            fputc(' ', cmd);
-        }
-        fprintf(cmd, "%s", av[i]);
-    }
-
-    fclose(cmd);
-
-    /* Send command
-     */
-    command = src_rcon_command(c);
-    if (command == NULL) {
-        goto cleanup;
-    }
-
-    if (send_message(sock, command)) {
-        goto cleanup;
-    }
-
-    if (recv_messages(sock, &commandanswers)) {
-        goto cleanup;
-    }
-
-    if (!src_rcon_command_valid(command, commandanswers)) {
-        goto cleanup;
-    }
-
-    if (commandanswers[1] == NULL) {
-
-        src_rcon_freev(commandanswers);
-        commandanswers = NULL;
-
-        if (recv_messages(sock, &commandanswers)) {
+    if (ac > 0) {
+        if (handle_arguments(sock, ac, av)) {
             goto cleanup;
         }
-
-        p = commandanswers;
     } else {
-        p = &commandanswers[1];
+        if (handle_stdin(sock)) {
+            goto cleanup;
+        }
     }
 
-    for (; *p != NULL; p++) {
-        fprintf(stdout, "%s\n", (char const*)(*p)->body);
-    }
 
     ec = 0;
 
 cleanup:
 
-    free(c);
-
     src_rcon_free(auth);
     src_rcon_freev(authanswers);
-
-    src_rcon_free(command);
-    src_rcon_freev(commandanswers);
 
     if (sock > -1) {
         close(sock);
