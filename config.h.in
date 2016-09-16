@@ -1,0 +1,6 @@
+#ifndef RCON_CONFIG_H
+#define RCON_CONFIG_H
+
+#cmakedefine HAVE_ARC4RANDOM_UNIFORM
+
+#endif
