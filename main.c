@@ -1,5 +1,8 @@
 #include "rcon.h"
+#include "config.h"
 #include "srcrcon.h"
+
+#include <glib.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -17,37 +20,56 @@
 static char *host = NULL;
 static char *password = NULL;
 static char *port = NULL;
+static char *config = NULL;
+static char *server = NULL;
+
+static void cleanup(void)
+{
+    config_free();
+
+    free(host);
+    free(password);
+    free(port);
+    free(config);
+    free(server);
+}
 
 static void usage(void)
 {
     puts("rcon [options] command");
     puts("options:");
+    puts("  -c --config     Alternate configuration file");
     puts("  -H --help       This bogus");
     puts("  -h --host       Host name or IP");
     puts("  -P --password   RCON Password");
     puts("  -p --port       Port or service");
+    puts("  -s --server     Use this server from config file");
 }
 
 static int parse_args(int ac, char **av)
 {
     static struct option opts[] = {
+        { "config", required_argument, 0, 'c' },
         { "help", no_argument, 0, 'H' },
         { "host", required_argument, 0, 'h' },
         { "password", required_argument, 0, 'P' },
         { "port", required_argument, 0, 'p' },
+        { "server", required_argument, 0, 's' },
         { NULL, 0, 0, 0 }
     };
 
-    static char const *optstr = "Hh:P:p:";
+    static char const *optstr = "c:Hh:P:p:s:";
 
     int c = 0;
 
     while ((c = getopt_long(ac, av, optstr, opts, NULL)) != -1) {
         switch (c)
         {
+        case 'c': free(config); config = strdup(optarg); break;
         case 'h': free(host); host = strdup(optarg); break;
         case 'p': free(port); port = strdup(optarg); break;
         case 'P': free(password); password = strdup(optarg); break;
+        case 's': free(server); server = strdup(optarg); break;
         case 'H': usage(); exit(0); break;
         default: /* intentional */
         case '?': usage(); exit(1); break;
@@ -249,6 +271,47 @@ static int handle_stdin(int sock)
     return ec;
 }
 
+int do_config(void)
+{
+    if (server == NULL) {
+        return 0;
+    }
+
+    if (config == NULL) {
+        char const *home = getenv("HOME");
+        size_t sz = 0;
+
+        if (home == NULL) {
+            fprintf(stderr, "Neither config file nor $HOME is set\n");
+            return 4;
+        }
+
+        sz = strlen(home) + 10;
+        config = calloc(1, sz);
+        if (config == NULL) {
+            return 4;
+        }
+
+        g_strlcpy(config, getenv("HOME"), sz);
+        g_strlcat(config, "/.rconrc", sz);
+    }
+
+    if (config_load(config)) {
+        return 2;
+    }
+
+    free(host);
+    free(port);
+    free(password);
+
+    if (config_host_data(server, &host, &port, &password)) {
+        fprintf(stderr, "Server %s not found in configuration\n", server);
+        return 2;
+    }
+
+    return 0;
+}
+
 int main(int ac, char **av)
 {
     struct addrinfo *info = NULL, *ai = NULL;
@@ -258,7 +321,18 @@ int main(int ac, char **av)
     int ret = 0;
     int ec = 3;
 
+    atexit(cleanup);
+
     parse_args(ac, av);
+    if (do_config()) {
+        return 2;
+    }
+    /* Now parse arguments *again*. This allows for overrides on the command
+     * line.
+     */
+    optind = 1;
+    parse_args(ac, av);
+
 
     ac -= optind;
     av += optind;
