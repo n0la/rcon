@@ -131,9 +131,10 @@ src_rcon_command_wait(src_rcon_message_t const *cmd,
     src_rcon_message_t **p = NULL, **it = NULL;
     int ret = 0;
     size_t count = 0;
+    size_t o = 0;
     int found = 0;
 
-    ret = src_rcon_deserialize(&p, off, &count, buf, size);
+    ret = src_rcon_deserialize(&p, &o, &count, buf, size);
     if (ret) {
         return ret;
     }
@@ -150,6 +151,7 @@ src_rcon_command_wait(src_rcon_message_t const *cmd,
         return src_rcon_moredata;
     }
 
+    *off = o;
     *replies = p;
 
     return src_rcon_success;
@@ -193,8 +195,6 @@ src_rcon_auth_wait(src_rcon_message_t const *auth, size_t *o,
         return src_rcon_moredata;
     }
 
-    *o = off;
-
     if (p[0]->type != serverdata_value &&
         p[1]->id != auth->id) {
         src_rcon_freev(p);
@@ -205,6 +205,8 @@ src_rcon_auth_wait(src_rcon_message_t const *auth, size_t *o,
         src_rcon_freev(p);
         return src_rcon_protocolerror;
     }
+
+    *o = off;
 
     if (p[1]->id != auth->id) {
         src_rcon_freev(p);
