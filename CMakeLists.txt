@@ -5,6 +5,8 @@ FIND_PACKAGE(PkgConfig)
 
 PKG_CHECK_MODULES(GLIB2 REQUIRED glib-2.0)
 
+SET(INSTALL_BASH_COMPLETION ON  CACHE BOOLEAN "Install bash completion?")
+
 SET(SOURCES
   "main.c"
   "srcrcon.c"
@@ -29,3 +31,16 @@ TARGET_LINK_LIBRARIES(rcon ${GLIB2_LIBRARIES})
 
 INSTALL(TARGETS rcon RUNTIME DESTINATION bin)
 INSTALL(FILES rcon.1 DESTINATION share/man/man1)
+
+IF(INSTALL_BASH_COMPLETION)
+  # Try bash completion
+  PKG_CHECK_MODULES(BC REQUIRED bash-completion)
+  PKG_GET_VARIABLE(COMPLETIONS_DIR bash-completion completionsdir)
+  IF(NOT DEFINED COMPLETIONS_DIR)
+    MESSAGE(FATAL_ERROR
+      "pkg-config of bash-completion does not specify completionsdir")
+  ENDIF()
+  INSTALL(FILES "rcon.bashcomp.sh"
+    DESTINATION ${COMPLETIONS_DIR}
+    RENAME "rcon")
+ENDIF()
