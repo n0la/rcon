@@ -93,7 +93,7 @@ port = 27045
 password = somepass
 ```
 
-Now you cand do:
+Now you can do:
 
 ```
 $ rcon -s somehost status
