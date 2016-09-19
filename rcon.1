@@ -1,0 +1,84 @@
+.TH RCON 1 "September 19, 2016" "version 0.1" "USER COMMANDS"
+.SH NAME
+rcon \- command line source rcon client
+.SH SYNOPSIS
+.B rcon [options] command
+.P
+.SH DESCRIPTION
+rcon can be used as a command line remote console client for source game servers. It supports a configuration file to savely store your rcon passwords. It will execute the command given, or - if no command is given -  will read a list of commands from standard input.
+.SH OPTIONS
+.TP
+\fB\-c \-\-config\fR filename
+Specify an alternate path to the configuration file. Default is $HOME/.rconrc
+.
+.TP
+\fB\-H \-\-help\fR
+Usage
+.
+.TP
+\fB\-h \-\-host\fR hostname
+Hostname or IP address of the server
+.
+.TP
+\fB\-p \-\-port\fR port
+Port or service name
+.
+.TP
+\fB\-P \-\-password\fR password
+Remote console password of the server
+.
+.TP
+\fB\-s \-\-server\fR name
+Use this server from the configuration file
+.
+.SH FILES
+.TP
+.B
+~/.rconrc
+The default configuration filename for rcon.
+.SH CONFIGURATION FILE
+The configuration file must be in the key file format (commonly known as INI file) and adhere to the following schema:
+
+  [myserver]
+  hostname = 173.43.63.111
+  post = 27003
+  password = somepass
+
+This server can than be used from the command line with the
+.B -s
+parameter:
+
+  rcon -s myserver status
+
+The command line still trumps the configuration file, so the following would override the port to 27010:
+
+  rcon -s myserver -p 27010 status
+
+.SH INTERPRETER
+
+rcon can also be used as script interpreter. Just specify the rcon binary in the she bang. Lines starting with a hash sign (#) are ignored, other non-empty lines are being treated as commands. The following script runs two commands:
+
+  #!/usr/bin/rcon -s myserver
+
+  # Query status
+  status
+
+  # List plugins
+  sm plugins list
+
+.SH EXAMPLES
+
+Send status to a server with given IP, port and password:
+
+  rcon -h 173.43.63.11 -p 27003 -P somepass status
+
+Send a patch of commands to server:
+
+  echo -e "status\\nsm plugins list" | rcon -s myserver
+
+.SH BUGS
+
+Report bugs at https://github.com/n0la/rcon
+
+.SH AUTHOR
+Copyright (c) 2016 Florian Stinglmayr <florian@n0la.org>
