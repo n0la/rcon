@@ -105,25 +105,54 @@ src_rcon_message_t *src_rcon_command(char const *cmd)
     return msg;
 }
 
-int src_rcon_command_valid(src_rcon_message_t const *request,
-                          src_rcon_message_t **reply)
+src_rcon_message_t *src_rcon_end_marker(src_rcon_message_t const *cmd)
 {
-    src_rcon_message_t *p = NULL;
+    src_rcon_message_t *msg = NULL;
 
-    return_if_true(reply == NULL, -1);
-    return_if_true(*reply == NULL, -1);
-
-    p = *reply;
-
-    if (p->type != serverdata_command) {
-        return -1;
+    msg = src_rcon_new();
+    if (msg == NULL) {
+        return NULL;
     }
 
-    if (p->id != request->id) {
-        return -1;
+    msg->type = serverdata_value;
+    msg->id = cmd->id;
+
+    src_rcon_update_size(msg);
+
+    return msg;
+}
+
+src_rcon_error_t
+src_rcon_command_wait(src_rcon_message_t const *cmd,
+                      src_rcon_message_t ***replies,
+                      size_t *off, void const *buf,
+                      size_t size)
+{
+    src_rcon_message_t **p = NULL, **it = NULL;
+    int ret = 0;
+    size_t count = 0;
+    int found = 0;
+
+    ret = src_rcon_deserialize(&p, off, &count, buf, size);
+    if (ret) {
+        return ret;
     }
 
-    return 0;
+    for (it = p; *it != NULL; it++) {
+        if ((*it)->id == cmd->id && strlen((char const *)(*it)->body) == 0) {
+            found = 1;
+            break;
+        }
+    }
+
+    if (!found) {
+        src_rcon_freev(p);
+        return src_rcon_moredata;
+    }
+
+    *replies = p;
+
+    return src_rcon_success;
 }
 
 src_rcon_message_t *src_rcon_auth(char const *password)
@@ -146,39 +175,45 @@ src_rcon_message_t *src_rcon_auth(char const *password)
     return msg;
 }
 
-int src_rcon_auth_valid(src_rcon_message_t const *request,
-                        src_rcon_message_t **reply)
+src_rcon_error_t
+src_rcon_auth_wait(src_rcon_message_t const *auth, size_t *o,
+                   void const *buf, size_t sz)
 {
     src_rcon_message_t **p = NULL;
-    int count = 0;
+    size_t off = 0, count = 2;
+    int ret = 0;
 
-    for (p = reply; *p != NULL && count < 2; p++, ++count) {
-        if ((reply[count])->id != request->id) {
-            return -1;
-        }
-        switch (count) {
-        case 0:
-        {
-            if (reply[count]->type != serverdata_value) {
-                return -1;
-            }
-        } break;
-
-        case 1:
-        {
-            if (reply[count]->type != serverdata_auth_response) {
-                return -1;
-            }
-        } break;
-
-        }
+    ret = src_rcon_deserialize(&p, &off, &count, buf, sz);
+    if (ret) {
+        return ret;
     }
 
-    if (count < 1) {
-        return -1;
+    if (count < 2) {
+        src_rcon_freev(p);
+        return src_rcon_moredata;
     }
 
-    return 0;
+    *o = off;
+
+    if (p[0]->type != serverdata_value &&
+        p[1]->id != auth->id) {
+        src_rcon_freev(p);
+        return src_rcon_protocolerror;
+    }
+
+    if (p[1]->type != serverdata_auth_response) {
+        src_rcon_freev(p);
+        return src_rcon_protocolerror;
+    }
+
+    if (p[1]->id != auth->id) {
+        src_rcon_freev(p);
+        return src_rcon_authinvalid;
+    }
+
+    src_rcon_freev(p);
+
+    return src_rcon_success;
 }
 
 int src_rcon_serialize(src_rcon_message_t const *m,
@@ -215,9 +250,9 @@ int src_rcon_serialize(src_rcon_message_t const *m,
 }
 
 int src_rcon_deserialize(src_rcon_message_t ***msg, size_t *off,
-                         void const *buf, size_t sz)
+                         size_t *cnt, void const *buf, size_t sz)
 {
-    int count = 1;
+    uint32_t count = 1;
     FILE *str = NULL;
     src_rcon_message_t **res = NULL;
 
@@ -235,6 +270,12 @@ int src_rcon_deserialize(src_rcon_message_t ***msg, size_t *off,
         src_rcon_message_t *m = NULL;
         src_rcon_message_t **tmp = NULL;
         size_t bufsize = 0;
+
+        if (cnt && *cnt > 0) {
+            if (count-1 > *cnt) {
+                break;
+            }
+        }
 
         m = src_rcon_new();
 
@@ -289,8 +330,11 @@ int src_rcon_deserialize(src_rcon_message_t ***msg, size_t *off,
 
     if (res != NULL) {
         *msg = res;
-        return 0;
+        if (cnt) {
+            *cnt = (count-1);
+        }
+        return src_rcon_success;
     }
 
-    return -3;
+    return src_rcon_moredata;
 }

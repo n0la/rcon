@@ -23,6 +23,8 @@ static char *port = NULL;
 static char *config = NULL;
 static char *server = NULL;
 
+static GByteArray *response = NULL;
+
 static void cleanup(void)
 {
     config_free();
@@ -32,6 +34,10 @@ static void cleanup(void)
     free(port);
     free(config);
     free(server);
+
+    if (response) {
+        g_byte_array_free(response, TRUE);
+    }
 }
 
 static void usage(void)
@@ -111,54 +117,41 @@ static int send_message(int sock, src_rcon_message_t *msg)
     return 0;
 }
 
-static int recv_messages(int sock, src_rcon_message_t ***msgs)
+static int wait_auth(int sock, src_rcon_message_t *auth)
 {
-    char *buf = NULL;
-    size_t sz = 0;
-    FILE *mem = NULL;
-    char tmp[512];
+    uint8_t tmp[512];
     int ret = 0;
+    src_rcon_error_t status;
     size_t off = 0;
-
-    mem = open_memstream(&buf, &sz);
-    if (mem == NULL) {
-        return -1;
-    }
 
     do {
         ret = read(sock, tmp, sizeof(tmp));
         if (ret < 0) {
-            fclose(mem);
-            free(buf);
             fprintf(stderr, "Failed to receive data: %s\n", strerror(errno));
             return -1;
         }
 
-        fwrite(tmp, 1, ret, mem);
-        if (ret < sizeof(tmp)) {
-            break;
+        g_byte_array_append(response, tmp, ret);
+
+        status = src_rcon_auth_wait(auth, &off, response->data, response->len);
+        if (status != src_rcon_moredata) {
+            g_byte_array_remove_range(response, 0, off);
+            return (int)status;
         }
     } while (true);
 
-    fclose(mem);
-    mem = NULL;
-
-    if (src_rcon_deserialize(msgs, &off, buf, sz)) {
-        free(buf);
-        return -1;
-    }
-
-    free(buf);
-
-    return 0;
-
+    return 1;
 }
 
 static int send_command(int sock, char const *cmd)
 {
-    src_rcon_message_t *command = NULL;
+    src_rcon_message_t *command = NULL, *marker = NULL;
     src_rcon_message_t **commandanswers = NULL;
     src_rcon_message_t **p = NULL;
+    uint8_t tmp[512];
+    int ret = 0;
+    src_rcon_error_t status;
+    size_t off = 0;
     int ec = -1;
 
     /* Send command
@@ -172,29 +165,32 @@ static int send_command(int sock, char const *cmd)
         goto cleanup;
     }
 
-    if (recv_messages(sock, &commandanswers)) {
+    marker = src_rcon_end_marker(command);
+    if (marker == NULL) {
         goto cleanup;
     }
 
-    if (!src_rcon_command_valid(command, commandanswers)) {
+    if (send_message(sock, marker)) {
         goto cleanup;
     }
 
-    if (commandanswers[1] == NULL) {
-
-        src_rcon_freev(commandanswers);
-        commandanswers = NULL;
-
-        if (recv_messages(sock, &commandanswers)) {
-            goto cleanup;
+    do {
+        ret = read(sock, tmp, sizeof(tmp));
+        if (ret < 0) {
+            fprintf(stderr, "Failed to receive data: %s\n", strerror(errno));
+            return -1;
         }
 
-        p = commandanswers;
-    } else {
-        p = &commandanswers[1];
-    }
+        g_byte_array_append(response, tmp, ret);
+        status = src_rcon_command_wait(command, &commandanswers, &off,
+                                       response->data, response->len);
+        if (status != src_rcon_moredata) {
+            g_byte_array_remove_range(response, 0, off);
+            break;
+        }
+    } while (true);
 
-    for (; *p != NULL; p++) {
+    for (p = commandanswers; *p != NULL; p++) {
         fprintf(stdout, "%s", (char const*)(*p)->body);
         fflush(stdout);
     }
@@ -204,6 +200,7 @@ static int send_command(int sock, char const *cmd)
 cleanup:
 
     src_rcon_free(command);
+    src_rcon_free(marker);
     src_rcon_freev(commandanswers);
 
     return ec;
@@ -371,6 +368,8 @@ int main(int ac, char **av)
         goto cleanup;
     }
 
+    response = g_byte_array_new();
+
     /* Do we have a password?
      */
     if (password != NULL && strlen(password) > 0) {
@@ -382,11 +381,7 @@ int main(int ac, char **av)
             goto cleanup;
         }
 
-        if (recv_messages(sock, &authanswers)) {
-            goto cleanup;
-        }
-
-        if (src_rcon_auth_valid(auth, authanswers)) {
+        if (wait_auth(sock, auth)) {
             fprintf(stderr, "Invalid auth reply, valid password?\n");
             goto cleanup;
         }
