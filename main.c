@@ -22,7 +22,7 @@ static void usage(void)
 {
     puts("rcon [options] command");
     puts("options:");
-    puts("  -H --help       This bougs");
+    puts("  -H --help       This bogus");
     puts("  -h --host       Host name or IP");
     puts("  -P --password   RCON Password");
     puts("  -p --port       Port or service");
