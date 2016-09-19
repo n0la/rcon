@@ -36,22 +36,25 @@ static void cleanup(void)
 
 static void usage(void)
 {
-    puts("rcon [options] command");
-    puts("options:");
-    puts("  -c --config     Alternate configuration file");
-    puts("  -H --help       This bogus");
-    puts("  -h --host       Host name or IP");
-    puts("  -P --password   RCON Password");
-    puts("  -p --port       Port or service");
-    puts("  -s --server     Use this server from config file");
+    puts("");
+    puts("Usage:");
+    puts(" rcon [options] command");
+    puts("");
+    puts("Options:");
+    puts(" -c, --config     Alternate configuration file");
+    puts(" -h, --help       This bogus");
+    puts(" -H, --host       Host name or IP");
+    puts(" -P, --password   RCON Password");
+    puts(" -p, --port       Port or service");
+    puts(" -s, --server     Use this server from config file");
 }
 
 static int parse_args(int ac, char **av)
 {
     static struct option opts[] = {
         { "config", required_argument, 0, 'c' },
-        { "help", no_argument, 0, 'H' },
-        { "host", required_argument, 0, 'h' },
+        { "help", no_argument, 0, 'h' },
+        { "host", required_argument, 0, 'H' },
         { "password", required_argument, 0, 'P' },
         { "port", required_argument, 0, 'p' },
         { "server", required_argument, 0, 's' },
@@ -66,11 +69,11 @@ static int parse_args(int ac, char **av)
         switch (c)
         {
         case 'c': free(config); config = strdup(optarg); break;
-        case 'h': free(host); host = strdup(optarg); break;
+        case 'H': free(host); host = strdup(optarg); break;
         case 'p': free(port); port = strdup(optarg); break;
         case 'P': free(password); password = strdup(optarg); break;
         case 's': free(server); server = strdup(optarg); break;
-        case 'H': usage(); exit(0); break;
+        case 'h': usage(); exit(0); break;
         default: /* intentional */
         case '?': usage(); exit(1); break;
         }
