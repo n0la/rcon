@@ -305,6 +305,7 @@ int src_rcon_deserialize(src_rcon_message_t ***msg, size_t *off,
         m->body = calloc(1, bufsize+1);
         if (m->body == NULL) {
             src_rcon_free(m);
+            src_rcon_freev(res);
             return -2;
         }
 
@@ -323,6 +324,7 @@ int src_rcon_deserialize(src_rcon_message_t ***msg, size_t *off,
         tmp = realloc(res, count * sizeof(src_rcon_message_t*));
         if (tmp == NULL) {
             src_rcon_freev(res);
+            src_rcon_free(m);
             return -2;
         }
         res = tmp;
