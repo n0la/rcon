@@ -280,6 +280,10 @@ int src_rcon_deserialize(src_rcon_message_t ***msg, size_t *off,
         }
 
         m = src_rcon_new();
+        if (m == NULL) {
+            src_rcon_freev(res);
+            return -2;
+        }
 
         if (fread(&m->size, 1, sizeof(m->size), str) < sizeof(m->size)) {
             src_rcon_free(m);
