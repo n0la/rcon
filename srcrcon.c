@@ -94,17 +94,18 @@ static void src_rcon_message_random_id(src_rcon_message_t *m)
 #endif
 }
 
-static int src_rcon_message_body(src_rcon_message_t *m, char const *body)
+static rcon_error_t
+src_rcon_message_body(src_rcon_message_t *m, char const *body)
 {
     free(m->body);
     m->body = NULL;
 
     m->body = (uint8_t*)strdup(body);
     if (m->body == NULL) {
-        return -1;
+        return rcon_error_memory;
     }
 
-    return 0;
+    return rcon_error_success;
 }
 
 src_rcon_message_t *src_rcon_command(src_rcon_t *r, char const *cmd)
@@ -117,7 +118,7 @@ src_rcon_message_t *src_rcon_command(src_rcon_t *r, char const *cmd)
     }
 
     msg->type = serverdata_command;
-    if (src_rcon_message_body(msg, cmd)) {
+    if (src_rcon_message_body(msg, cmd) != rcon_error_success) {
         src_rcon_message_free(msg);
         return NULL;
     }
@@ -144,7 +145,7 @@ static src_rcon_message_t *src_rcon_end_marker(src_rcon_message_t const *cmd)
     return msg;
 }
 
-src_rcon_error_t
+rcon_error_t
 src_rcon_command_wait(src_rcon_t *r,
                       src_rcon_message_t const *cmd,
                       src_rcon_message_t ***replies,
@@ -171,13 +172,13 @@ src_rcon_command_wait(src_rcon_t *r,
 
     if (!found) {
         src_rcon_message_freev(p);
-        return src_rcon_moredata;
+        return rcon_error_moredata;
     }
 
     *off = o;
     *replies = p;
 
-    return src_rcon_success;
+    return rcon_error_success;
 }
 
 src_rcon_message_t *src_rcon_auth(src_rcon_t *r, char const *password)
@@ -200,7 +201,7 @@ src_rcon_message_t *src_rcon_auth(src_rcon_t *r, char const *password)
     return msg;
 }
 
-src_rcon_error_t
+rcon_error_t
 src_rcon_auth_wait(src_rcon_t *r,
                    src_rcon_message_t const *auth, size_t *o,
                    void const *buf, size_t sz)
@@ -216,35 +217,36 @@ src_rcon_auth_wait(src_rcon_t *r,
 
     if (count < 2) {
         src_rcon_message_freev(p);
-        return src_rcon_moredata;
+        return rcon_error_moredata;
     }
 
     if (p[0]->type != serverdata_value &&
         p[1]->id != auth->id) {
         src_rcon_message_freev(p);
-        return src_rcon_protocolerror;
+        return rcon_error_protocol;
     }
 
     if (p[1]->type != serverdata_auth_response) {
         src_rcon_message_freev(p);
-        return src_rcon_protocolerror;
+        return rcon_error_protocol;
     }
 
     *o = off;
 
     if (p[1]->id != auth->id) {
         src_rcon_message_freev(p);
-        return src_rcon_authinvalid;
+        return rcon_error_auth;
     }
 
     src_rcon_message_freev(p);
 
-    return src_rcon_success;
+    return rcon_error_success;
 }
 
-int src_rcon_serialize(src_rcon_t *r,
-                       src_rcon_message_t const *m,
-                       uint8_t **buf, size_t *sz)
+rcon_error_t
+src_rcon_serialize(src_rcon_t *r,
+                   src_rcon_message_t const *m,
+                   uint8_t **buf, size_t *sz)
 {
     uint8_t *tmp = NULL;
     size_t size = 0;
@@ -256,7 +258,7 @@ int src_rcon_serialize(src_rcon_t *r,
 
     str = open_memstream((char**)&tmp, &size);
     if (str == NULL) {
-        return -2;
+        return rcon_error_memory;
     }
 
     fwrite(&m->size, 1, sizeof(m->size), str);
@@ -276,13 +278,13 @@ int src_rcon_serialize(src_rcon_t *r,
         if (m == NULL) {
             fclose(str);
             free(tmp);
-            return -2;
+            return rcon_error_memory;
         }
 
         if (src_rcon_serialize(r, marker, &mbuf, &msz) != 0) {
             fclose(str);
             free(tmp);
-            return -2;
+            return rcon_error_internal;
         }
 
         fwrite(mbuf, 1, msz, str);
@@ -293,12 +295,13 @@ int src_rcon_serialize(src_rcon_t *r,
     *buf = tmp;
     *sz = size;
 
-    return 0;
+    return rcon_error_success;
 }
 
-int src_rcon_deserialize(src_rcon_t *r,
-                         src_rcon_message_t ***msg, size_t *off,
-                         size_t *cnt, void const *buf, size_t sz)
+rcon_error_t
+src_rcon_deserialize(src_rcon_t *r,
+                     src_rcon_message_t ***msg, size_t *off,
+                     size_t *cnt, void const *buf, size_t sz)
 {
     uint32_t count = 1;
     FILE *str = NULL;
@@ -311,7 +314,7 @@ int src_rcon_deserialize(src_rcon_t *r,
 
     str = fmemopen((char*)buf, sz, "r");
     if (str == NULL) {
-        return -2;
+        return rcon_error_memory;
     }
 
     do {
@@ -328,7 +331,7 @@ int src_rcon_deserialize(src_rcon_t *r,
         m = src_rcon_message_new();
         if (m == NULL) {
             src_rcon_message_freev(res);
-            return -2;
+            return rcon_error_memory;
         }
 
         if (fread(&m->size, 1, sizeof(m->size), str) < sizeof(m->size)) {
@@ -352,7 +355,7 @@ int src_rcon_deserialize(src_rcon_t *r,
         if (m->body == NULL) {
             src_rcon_message_free(m);
             src_rcon_message_freev(res);
-            return -2;
+            return rcon_error_memory;
         }
 
         if (fread(m->body, 1, bufsize, str) < bufsize) {
@@ -371,7 +374,7 @@ int src_rcon_deserialize(src_rcon_t *r,
         if (tmp == NULL) {
             src_rcon_message_freev(res);
             src_rcon_message_free(m);
-            return -2;
+            return rcon_error_memory;
         }
         res = tmp;
 
@@ -387,8 +390,8 @@ int src_rcon_deserialize(src_rcon_t *r,
         if (cnt) {
             *cnt = (count-1);
         }
-        return src_rcon_success;
+        return rcon_error_success;
     }
 
-    return src_rcon_moredata;
+    return rcon_error_moredata;
 }

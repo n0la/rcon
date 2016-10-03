@@ -124,7 +124,7 @@ static int wait_auth(int sock, src_rcon_message_t *auth)
 {
     uint8_t tmp[512];
     int ret = 0;
-    src_rcon_error_t status;
+    rcon_error_t status;
     size_t off = 0;
 
     do {
@@ -138,7 +138,7 @@ static int wait_auth(int sock, src_rcon_message_t *auth)
 
         status = src_rcon_auth_wait(r, auth, &off,
                                     response->data, response->len);
-        if (status != src_rcon_moredata) {
+        if (status != rcon_error_moredata) {
             g_byte_array_remove_range(response, 0, off);
             return (int)status;
         }
@@ -154,7 +154,7 @@ static int send_command(int sock, char const *cmd)
     src_rcon_message_t **p = NULL;
     uint8_t tmp[512];
     int ret = 0;
-    src_rcon_error_t status;
+    rcon_error_t status;
     size_t off = 0;
     int ec = -1;
 
@@ -179,7 +179,7 @@ static int send_command(int sock, char const *cmd)
         g_byte_array_append(response, tmp, ret);
         status = src_rcon_command_wait(r, command, &commandanswers, &off,
                                        response->data, response->len);
-        if (status != src_rcon_moredata) {
+        if (status != rcon_error_moredata) {
             g_byte_array_remove_range(response, 0, off);
             break;
         }
