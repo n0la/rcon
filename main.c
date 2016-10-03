@@ -24,10 +24,13 @@ static char *config = NULL;
 static char *server = NULL;
 
 static GByteArray *response = NULL;
+static src_rcon_t *r = NULL;
 
 static void cleanup(void)
 {
     config_free();
+
+    src_rcon_free(r);
 
     free(host);
     free(password);
@@ -95,7 +98,7 @@ static int send_message(int sock, src_rcon_message_t *msg)
     size_t size = 0;
     int ret = 0;
 
-    if (src_rcon_serialize(msg, &data, &size)) {
+    if (src_rcon_serialize(r, msg, &data, &size)) {
         return -1;
     }
 
@@ -133,7 +136,8 @@ static int wait_auth(int sock, src_rcon_message_t *auth)
 
         g_byte_array_append(response, tmp, ret);
 
-        status = src_rcon_auth_wait(auth, &off, response->data, response->len);
+        status = src_rcon_auth_wait(r, auth, &off,
+                                    response->data, response->len);
         if (status != src_rcon_moredata) {
             g_byte_array_remove_range(response, 0, off);
             return (int)status;
@@ -145,7 +149,7 @@ static int wait_auth(int sock, src_rcon_message_t *auth)
 
 static int send_command(int sock, char const *cmd)
 {
-    src_rcon_message_t *command = NULL, *marker = NULL;
+    src_rcon_message_t *command = NULL;
     src_rcon_message_t **commandanswers = NULL;
     src_rcon_message_t **p = NULL;
     uint8_t tmp[512];
@@ -156,21 +160,12 @@ static int send_command(int sock, char const *cmd)
 
     /* Send command
      */
-    command = src_rcon_command(cmd);
+    command = src_rcon_command(r, cmd);
     if (command == NULL) {
         goto cleanup;
     }
 
     if (send_message(sock, command)) {
-        goto cleanup;
-    }
-
-    marker = src_rcon_end_marker(command);
-    if (marker == NULL) {
-        goto cleanup;
-    }
-
-    if (send_message(sock, marker)) {
         goto cleanup;
     }
 
@@ -182,7 +177,7 @@ static int send_command(int sock, char const *cmd)
         }
 
         g_byte_array_append(response, tmp, ret);
-        status = src_rcon_command_wait(command, &commandanswers, &off,
+        status = src_rcon_command_wait(r, command, &commandanswers, &off,
                                        response->data, response->len);
         if (status != src_rcon_moredata) {
             g_byte_array_remove_range(response, 0, off);
@@ -199,9 +194,8 @@ static int send_command(int sock, char const *cmd)
 
 cleanup:
 
-    src_rcon_free(command);
-    src_rcon_free(marker);
-    src_rcon_freev(commandanswers);
+    src_rcon_message_free(command);
+    src_rcon_message_freev(commandanswers);
 
     return ec;
 }
@@ -369,13 +363,14 @@ int main(int ac, char **av)
     }
 
     response = g_byte_array_new();
+    r = src_rcon_new();
 
     /* Do we have a password?
      */
     if (password != NULL && strlen(password) > 0) {
         /* Send auth request first
          */
-        auth = src_rcon_auth(password);
+        auth = src_rcon_auth(r, password);
 
         if (send_message(sock, auth)) {
             goto cleanup;
@@ -402,8 +397,8 @@ int main(int ac, char **av)
 
 cleanup:
 
-    src_rcon_free(auth);
-    src_rcon_freev(authanswers);
+    src_rcon_message_free(auth);
+    src_rcon_message_freev(authanswers);
 
     if (sock > -1) {
         close(sock);

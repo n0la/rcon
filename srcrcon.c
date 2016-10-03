@@ -6,10 +6,32 @@
 #include <string.h>
 #include <stddef.h>
 
-static void src_rcon_update_size(src_rcon_message_t *m);
-static void src_rcon_random_id(src_rcon_message_t *m);
+struct _src_rcon
+{
+    void *tag;
+};
 
-void src_rcon_free(src_rcon_message_t *msg)
+static void src_rcon_message_update_size(src_rcon_message_t *m);
+static void src_rcon_message_random_id(src_rcon_message_t *m);
+
+src_rcon_t * src_rcon_new(void)
+{
+    src_rcon_t *tmp = NULL;
+
+    tmp = calloc(1, sizeof(struct _src_rcon));
+    if (tmp == NULL) {
+        return tmp;
+    }
+
+    return tmp;
+}
+
+void src_rcon_free(src_rcon_t *r)
+{
+    free(r);
+}
+
+void src_rcon_message_free(src_rcon_message_t *msg)
 {
     return_if_true(msg == NULL,);
 
@@ -17,20 +39,20 @@ void src_rcon_free(src_rcon_message_t *msg)
     free(msg);
 }
 
-void src_rcon_freev(src_rcon_message_t **m)
+void src_rcon_message_freev(src_rcon_message_t **m)
 {
     src_rcon_message_t **i = NULL;
 
     return_if_true(m == NULL,);
 
     for (i = m; *i != NULL; i++) {
-        src_rcon_free(*i);
+        src_rcon_message_free(*i);
     }
 
     free(m);
 }
 
-src_rcon_message_t *src_rcon_new(void)
+src_rcon_message_t *src_rcon_message_new(void)
 {
     src_rcon_message_t *tmp = NULL;
 
@@ -47,13 +69,13 @@ src_rcon_message_t *src_rcon_new(void)
 
     tmp->type = serverdata_command;
     tmp->null = '\0';
-    src_rcon_random_id(tmp);
-    src_rcon_update_size(tmp);
+    src_rcon_message_random_id(tmp);
+    src_rcon_message_update_size(tmp);
 
     return tmp;
 }
 
-static void src_rcon_update_size(src_rcon_message_t *m)
+static void src_rcon_message_update_size(src_rcon_message_t *m)
 {
     return_if_true(m == NULL,);
 
@@ -63,7 +85,7 @@ static void src_rcon_update_size(src_rcon_message_t *m)
     m->size += sizeof(m->null);
 }
 
-static void src_rcon_random_id(src_rcon_message_t *m)
+static void src_rcon_message_random_id(src_rcon_message_t *m)
 {
 #ifdef HAVE_ARC4RANDOM_UNIFORM
     m->id = (int32_t)arc4random_uniform(INT32_MAX-1);
@@ -72,7 +94,7 @@ static void src_rcon_random_id(src_rcon_message_t *m)
 #endif
 }
 
-static int src_rcon_body(src_rcon_message_t *m, char const *body)
+static int src_rcon_message_body(src_rcon_message_t *m, char const *body)
 {
     free(m->body);
     m->body = NULL;
@@ -85,31 +107,31 @@ static int src_rcon_body(src_rcon_message_t *m, char const *body)
     return 0;
 }
 
-src_rcon_message_t *src_rcon_command(char const *cmd)
+src_rcon_message_t *src_rcon_command(src_rcon_t *r, char const *cmd)
 {
     src_rcon_message_t *msg = NULL;
 
-    msg = src_rcon_new();
+    msg = src_rcon_message_new();
     if (msg == NULL) {
         return NULL;
     }
 
     msg->type = serverdata_command;
-    if (src_rcon_body(msg, cmd)) {
-        src_rcon_free(msg);
+    if (src_rcon_message_body(msg, cmd)) {
+        src_rcon_message_free(msg);
         return NULL;
     }
 
-    src_rcon_update_size(msg);
+    src_rcon_message_update_size(msg);
 
     return msg;
 }
 
-src_rcon_message_t *src_rcon_end_marker(src_rcon_message_t const *cmd)
+static src_rcon_message_t *src_rcon_end_marker(src_rcon_message_t const *cmd)
 {
     src_rcon_message_t *msg = NULL;
 
-    msg = src_rcon_new();
+    msg = src_rcon_message_new();
     if (msg == NULL) {
         return NULL;
     }
@@ -117,13 +139,14 @@ src_rcon_message_t *src_rcon_end_marker(src_rcon_message_t const *cmd)
     msg->type = serverdata_value;
     msg->id = cmd->id;
 
-    src_rcon_update_size(msg);
+    src_rcon_message_update_size(msg);
 
     return msg;
 }
 
 src_rcon_error_t
-src_rcon_command_wait(src_rcon_message_t const *cmd,
+src_rcon_command_wait(src_rcon_t *r,
+                      src_rcon_message_t const *cmd,
                       src_rcon_message_t ***replies,
                       size_t *off, void const *buf,
                       size_t size)
@@ -134,7 +157,7 @@ src_rcon_command_wait(src_rcon_message_t const *cmd,
     size_t o = 0;
     int found = 0;
 
-    ret = src_rcon_deserialize(&p, &o, &count, buf, size);
+    ret = src_rcon_deserialize(r, &p, &o, &count, buf, size);
     if (ret) {
         return ret;
     }
@@ -147,7 +170,7 @@ src_rcon_command_wait(src_rcon_message_t const *cmd,
     }
 
     if (!found) {
-        src_rcon_freev(p);
+        src_rcon_message_freev(p);
         return src_rcon_moredata;
     }
 
@@ -157,68 +180,70 @@ src_rcon_command_wait(src_rcon_message_t const *cmd,
     return src_rcon_success;
 }
 
-src_rcon_message_t *src_rcon_auth(char const *password)
+src_rcon_message_t *src_rcon_auth(src_rcon_t *r, char const *password)
 {
     src_rcon_message_t *msg = NULL;
 
-    msg = src_rcon_new();
+    msg = src_rcon_message_new();
     if (msg == NULL) {
         return NULL;
     }
 
     msg->type = serverdata_auth;
-    if (src_rcon_body(msg, password)) {
-        src_rcon_free(msg);
+    if (src_rcon_message_body(msg, password)) {
+        src_rcon_message_free(msg);
         return NULL;
     }
 
-    src_rcon_update_size(msg);
+    src_rcon_message_update_size(msg);
 
     return msg;
 }
 
 src_rcon_error_t
-src_rcon_auth_wait(src_rcon_message_t const *auth, size_t *o,
+src_rcon_auth_wait(src_rcon_t *r,
+                   src_rcon_message_t const *auth, size_t *o,
                    void const *buf, size_t sz)
 {
     src_rcon_message_t **p = NULL;
     size_t off = 0, count = 2;
     int ret = 0;
 
-    ret = src_rcon_deserialize(&p, &off, &count, buf, sz);
+    ret = src_rcon_deserialize(r, &p, &off, &count, buf, sz);
     if (ret) {
         return ret;
     }
 
     if (count < 2) {
-        src_rcon_freev(p);
+        src_rcon_message_freev(p);
         return src_rcon_moredata;
     }
 
     if (p[0]->type != serverdata_value &&
         p[1]->id != auth->id) {
-        src_rcon_freev(p);
+        src_rcon_message_freev(p);
         return src_rcon_protocolerror;
     }
 
     if (p[1]->type != serverdata_auth_response) {
-        src_rcon_freev(p);
+        src_rcon_message_freev(p);
         return src_rcon_protocolerror;
     }
 
     *o = off;
 
     if (p[1]->id != auth->id) {
-        src_rcon_freev(p);
+        src_rcon_message_freev(p);
         return src_rcon_authinvalid;
     }
 
-    src_rcon_freev(p);
+    src_rcon_message_freev(p);
 
     return src_rcon_success;
 }
 
-int src_rcon_serialize(src_rcon_message_t const *m,
+int src_rcon_serialize(src_rcon_t *r,
+                       src_rcon_message_t const *m,
                        uint8_t **buf, size_t *sz)
 {
     uint8_t *tmp = NULL;
@@ -243,6 +268,26 @@ int src_rcon_serialize(src_rcon_message_t const *m,
     fwrite(&m->null, 1, sizeof(m->null), str);
     fwrite(&m->null, 1, sizeof(m->null), str);
 
+    if (m->type == serverdata_command) {
+        uint8_t *mbuf = NULL;
+        size_t msz = 0;
+        src_rcon_message_t *marker = src_rcon_end_marker(m);
+
+        if (m == NULL) {
+            fclose(str);
+            free(tmp);
+            return -2;
+        }
+
+        if (src_rcon_serialize(r, marker, &mbuf, &msz) != 0) {
+            fclose(str);
+            free(tmp);
+            return -2;
+        }
+
+        fwrite(mbuf, 1, msz, str);
+    }
+
     fclose(str);
 
     *buf = tmp;
@@ -251,7 +296,8 @@ int src_rcon_serialize(src_rcon_message_t const *m,
     return 0;
 }
 
-int src_rcon_deserialize(src_rcon_message_t ***msg, size_t *off,
+int src_rcon_deserialize(src_rcon_t *r,
+                         src_rcon_message_t ***msg, size_t *off,
                          size_t *cnt, void const *buf, size_t sz)
 {
     uint32_t count = 1;
@@ -279,24 +325,24 @@ int src_rcon_deserialize(src_rcon_message_t ***msg, size_t *off,
             }
         }
 
-        m = src_rcon_new();
+        m = src_rcon_message_new();
         if (m == NULL) {
-            src_rcon_freev(res);
+            src_rcon_message_freev(res);
             return -2;
         }
 
         if (fread(&m->size, 1, sizeof(m->size), str) < sizeof(m->size)) {
-            src_rcon_free(m);
+            src_rcon_message_free(m);
             break;
         }
 
         if (fread(&m->id, 1, sizeof(m->id), str) < sizeof(m->id)) {
-            src_rcon_free(m);
+            src_rcon_message_free(m);
             break;
         }
 
         if (fread(&m->type, 1, sizeof(m->type), str) < sizeof(m->type)) {
-            src_rcon_free(m);
+            src_rcon_message_free(m);
             break;
         }
 
@@ -304,18 +350,18 @@ int src_rcon_deserialize(src_rcon_message_t ***msg, size_t *off,
         free(m->body);
         m->body = calloc(1, bufsize+1);
         if (m->body == NULL) {
-            src_rcon_free(m);
-            src_rcon_freev(res);
+            src_rcon_message_free(m);
+            src_rcon_message_freev(res);
             return -2;
         }
 
         if (fread(m->body, 1, bufsize, str) < bufsize) {
-            src_rcon_free(m);
+            src_rcon_message_free(m);
             break;
         }
 
         if (fread(&m->null, 1, sizeof(m->null), str) < sizeof(m->null)) {
-            src_rcon_free(m);
+            src_rcon_message_free(m);
             break;
         }
 
@@ -323,8 +369,8 @@ int src_rcon_deserialize(src_rcon_message_t ***msg, size_t *off,
 
         tmp = realloc(res, count * sizeof(src_rcon_message_t*));
         if (tmp == NULL) {
-            src_rcon_freev(res);
-            src_rcon_free(m);
+            src_rcon_message_freev(res);
+            src_rcon_message_free(m);
             return -2;
         }
         res = tmp;
