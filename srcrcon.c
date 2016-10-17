@@ -284,10 +284,14 @@ src_rcon_serialize(src_rcon_t *r,
         if (src_rcon_serialize(r, marker, &mbuf, &msz) != 0) {
             fclose(str);
             free(tmp);
+            src_rcon_message_free(marker);
             return rcon_error_internal;
         }
 
         fwrite(mbuf, 1, msz, str);
+
+        free(mbuf);
+        src_rcon_message_free(marker);
     }
 
     fclose(str);
