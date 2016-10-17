@@ -35,7 +35,17 @@ INSTALL(FILES rcon.1 DESTINATION share/man/man1)
 IF(INSTALL_BASH_COMPLETION)
   # Try bash completion
   PKG_CHECK_MODULES(BC REQUIRED bash-completion)
-  PKG_GET_VARIABLE(COMPLETIONS_DIR bash-completion completionsdir)
+  IF(${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION} GREATER 3.3)
+    PKG_GET_VARIABLE(COMPLETIONS_DIR bash-completion completionsdir)
+  ELSE()
+    IF(NOT DEFINED COMPLETIONS_DIR)
+      SET(COMPLETION_DEFAULT "share/bash-completion/completions")
+      MESSAGE(STATUS "PKG_GET_VARIABLE not available.")
+      MESSAGE(STATUS "Override default '${COMPLETION_DEFAULT}' with "
+        "-DCOMPLETIONS_DIR=/path/to/completions if necessary.")
+      SET(COMPLETIONS_DIR ${COMPLETION_DEFAULT})
+    ENDIF()
+  ENDIF()
   IF(NOT DEFINED COMPLETIONS_DIR)
     MESSAGE(FATAL_ERROR
       "pkg-config of bash-completion does not specify completionsdir")
