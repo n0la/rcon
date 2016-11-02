@@ -176,6 +176,11 @@ static int send_command(int sock, char const *cmd)
             return -1;
         }
 
+        if (ret == 0) {
+            fprintf(stderr, "Peer: connection closed\n");
+            return 0;
+        }
+
         g_byte_array_append(response, tmp, ret);
         status = src_rcon_command_wait(r, command, &commandanswers, &off,
                                        response->data, response->len);
@@ -185,9 +190,11 @@ static int send_command(int sock, char const *cmd)
         }
     } while (true);
 
-    for (p = commandanswers; *p != NULL; p++) {
-        fprintf(stdout, "%s", (char const*)(*p)->body);
-        fflush(stdout);
+    if (commandanswers != NULL) {
+        for (p = commandanswers; *p != NULL; p++) {
+            fprintf(stdout, "%s", (char const*)(*p)->body);
+            fflush(stdout);
+        }
     }
 
     ec = 0;
