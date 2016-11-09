@@ -1,6 +1,7 @@
 #include "rcon.h"
 #include "config.h"
 #include "srcrcon.h"
+#include "sysconfig.h"
 
 #include <glib.h>
 
@@ -11,6 +12,7 @@
 #include <string.h>
 #include <errno.h>
 #include <ctype.h>
+#include <err.h>
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -322,6 +324,16 @@ int main(int ac, char **av)
     int ret = 0;
     int ec = 3;
 
+#ifdef HAVE_PLEDGE
+    /* stdio = standard IO and send/recv
+     * rpath = config file
+     * inet = dns = :-)
+     */
+    if (pledge("stdio rpath inet dns", NULL) == -1) {
+        err(1, "pledge");
+    }
+#endif
+
     atexit(cleanup);
 
     parse_args(ac, av);
@@ -373,6 +385,14 @@ int main(int ac, char **av)
         fprintf(stderr, "Failed to connect to the given host/service\n");
         goto cleanup;
     }
+
+#ifdef HAVE_PLEDGE
+    /* Drop privileges further, since we are done socket()ing.
+     */
+    if (pledge("stdio", NULL) == -1) {
+        err(1, "pledge");
+    }
+#endif
 
     response = g_byte_array_new();
     r = src_rcon_new();
