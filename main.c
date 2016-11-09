@@ -315,7 +315,7 @@ int do_config(void)
 
 int main(int ac, char **av)
 {
-    struct addrinfo *info = NULL, *ai = NULL;
+    struct addrinfo *info = NULL, *ai = NULL, hint = {0};
     src_rcon_message_t *auth = NULL;
     src_rcon_message_t **authanswers = NULL;
     int sock = 0;
@@ -343,7 +343,12 @@ int main(int ac, char **av)
         return 1;
     }
 
-    if ((ret = getaddrinfo(host, port, NULL, &info))) {
+    memset(&hint, 0, sizeof(hint));
+    hint.ai_socktype = SOCK_STREAM;
+    hint.ai_family = AF_UNSPEC;
+    hint.ai_flags = AI_PASSIVE;
+
+    if ((ret = getaddrinfo(host, port, &hint, &info))) {
         fprintf(stderr, "Failed to resolve host: %s: %s\n",
                 host, gai_strerror(ret)
             );
