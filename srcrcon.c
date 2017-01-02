@@ -253,9 +253,9 @@ src_rcon_serialize(src_rcon_t *r,
     size_t size = 0;
     FILE *str = NULL;
 
-    return_if_true(m == NULL, -1);
-    return_if_true(buf == NULL, -1);
-    return_if_true(sz == NULL, -1);
+    return_if_true(m == NULL, rcon_error_args);
+    return_if_true(buf == NULL, rcon_error_args);
+    return_if_true(sz == NULL, rcon_error_args);
 
     str = open_memstream((char**)&tmp, &size);
     if (str == NULL) {
@@ -264,7 +264,7 @@ src_rcon_serialize(src_rcon_t *r,
 
     fwrite(&m->size, 1, sizeof(m->size), str);
     fwrite(&m->id, 1, sizeof(m->id), str);
-    fwrite(&m->type, 1, sizeof(m->id), str);
+    fwrite(&m->type, 1, sizeof(m->type), str);
     if (m->body != NULL) {
         fwrite(m->body, 1, strlen((char const *)m->body), str);
     }
@@ -311,11 +311,12 @@ src_rcon_deserialize(src_rcon_t *r,
     uint32_t count = 1;
     FILE *str = NULL;
     src_rcon_message_t **res = NULL;
+    size_t consumed = 0;
 
-    return_if_true(msg == NULL, -1);
-    return_if_true(off == NULL, -1);
-    return_if_true(buf == NULL, -1);
-    return_if_true(sz == 0, -1);
+    return_if_true(msg == NULL, rcon_error_args);
+    return_if_true(off == NULL, rcon_error_args);
+    return_if_true(buf == NULL, rcon_error_args);
+    return_if_true(sz == 0, rcon_error_args);
 
     str = fmemopen((char*)buf, sz, "r");
     if (str == NULL) {
@@ -385,12 +386,16 @@ src_rcon_deserialize(src_rcon_t *r,
 
         tmp[count-2] = m;
         tmp[count-1] = NULL;
+
+        consumed += m->size + sizeof(m->size);
     } while(true);
 
-    *off = ftell(str);
     fclose(str);
 
     if (res != NULL) {
+        if (off) {
+            *off = consumed;
+        }
         *msg = res;
         if (cnt) {
             *cnt = (count-1);
