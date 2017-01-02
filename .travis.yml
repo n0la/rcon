@@ -17,6 +17,6 @@ before_install:
 before_script:
   - mkdir build
   - cd build
-  - cmake ..
+  - cmake .. -DINSTALL_BASH_COMPLETION=OFF
 
 script: make
