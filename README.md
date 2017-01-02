@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/n0la/rcon.svg?branch=master)](https://travis-ci.org/n0la/rcon)
+
 # rcon
 
 rcon is a command line application that can be used as a Source RCON client.
