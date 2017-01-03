@@ -1,6 +1,7 @@
 #include "rcon.h"
 #include "srcrcon.h"
 #include "sysconfig.h"
+#include "memstream.h"
 
 #include <stdlib.h>
 #include <stdio.h>
