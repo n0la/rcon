@@ -155,7 +155,6 @@ FILE *open_memstream(char **ptr, size_t *sizeloc)
         if (!ms->contents) { free(ms);  return 0; } /* errno == ENOMEM */
         ms->ptr= ptr;
         ms->sizeloc= sizeloc;
-        memstream_print(ms);
         fp= funopen(ms, memstream_read, memstream_write, memstream_seek, memstream_close);
         if (!fp) {
             free(ms->contents);

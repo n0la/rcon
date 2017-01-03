@@ -11,11 +11,14 @@ SET(SOURCES
   "main.c"
   "srcrcon.c"
   "config.c"
-  "memstream.c")
+  "memstream.c"
+  "fmemopen.c"
+  )
 SET(HEADERS
   "srcrcon.h"
   "config.h"
   "memstream.h"
+  "fmemopen.h"
   ${CMAKE_CURRENT_BINARY_DIR}/sysconfig.h)
 
 INCLUDE_DIRECTORIES("${CMAKE_SOURCE_DIR}/include"
@@ -27,6 +30,7 @@ LINK_DIRECTORIES(${GLIB2_LIBRARY_DIRS})
 ADD_DEFINITIONS("-Wall -Werror")
 
 CHECK_FUNCTION_EXISTS(open_memstream HAVE_OPEN_MEMSTREAM)
+CHECK_FUNCTION_EXISTS(fmemopen HAVE_FMEMOPEN)
 CHECK_FUNCTION_EXISTS(arc4random_uniform HAVE_ARC4RANDOM_UNIFORM)
 CHECK_FUNCTION_EXISTS(pledge HAVE_PLEDGE)
 CONFIGURE_FILE(${CMAKE_CURRENT_SOURCE_DIR}/sysconfig.h.in

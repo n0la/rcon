@@ -3,6 +3,10 @@
 
 #cmakedefine HAVE_ARC4RANDOM_UNIFORM @HAVE_ARC4RANDOM_UNIFORM@
 #cmakedefine HAVE_PLEDGE @HAVE_PLEDGE@
+
+/* OS X related compabilities
+ */
 #cmakedefine HAVE_OPEN_MEMSTREAM @HAVE_OPEN_MEMSTREAM@
+#cmakedefine HAVE_FMEMOPEN @HAVE_FMEMOPEN@
 
 #endif
