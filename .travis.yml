@@ -12,11 +12,11 @@ addons:
 
 before_install:
   - sudo apt-get update -qq
-  - sudo apt-get install -qq libglib2.0-dev bash-completion
+  - sudo apt-get install -qq libglib2.0-dev bash-completion check
 
 before_script:
   - mkdir build
   - cd build
   - cmake .. -DINSTALL_BASH_COMPLETION=OFF
 
-script: make
+script: make && make test
