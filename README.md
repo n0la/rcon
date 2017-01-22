@@ -63,16 +63,23 @@ cvarlist
 EOS
 ```
 
-In this mode lines starting with ```#``` are ignored. This allows rcon to be
-used as a script interpreter:
+In this mode lines starting with ```#``` are ignored. This makes it possible to write scripts with comments for rcon:
 
-```
-#!/usr/bin/rcon -H somehost -p someport -P somepass
-
+```shell
+# List players
 status
+
+# List plugins
 sm plugins list
 
+# List variables
 cvarlist
+```
+
+You can invoke such scripts using:
+
+```
+$ rcon -H somehost -p someport -P somepass my_rcon_script.txt
 ```
 
 ## Exit Code
