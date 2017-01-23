@@ -64,15 +64,25 @@ EOS
 ```
 
 In this mode lines starting with ```#``` are ignored. This allows rcon to be
-used as a script interpreter:
+used as a script interpreter. Just pass it the script file through stdin:
 
-```
-#!/usr/bin/rcon -H somehost -p someport -P somepass
-
+```shell
+$ cat somescript.txt
+# This is a comment
 status
+
+# and this too!
 sm plugins list
 
 cvarlist
+```
+
+And execute your script like this:
+
+```shell
+$ rcon -H somehost -p someport -P somepass < somescript.txt
+# Or:
+$ cat somescript.txt | rcon -H somehost -p someport -P somepass
 ```
 
 ## Exit Code
