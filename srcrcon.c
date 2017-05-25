@@ -154,7 +154,8 @@ src_rcon_command_wait(src_rcon_t *r,
                       src_rcon_message_t const *cmd,
                       src_rcon_message_t ***replies,
                       size_t *off, void const *buf,
-                      size_t size)
+                      size_t size,
+                      int single_packet_mode)
 {
     src_rcon_message_t **p = NULL, **it = NULL;
     int ret = 0;
@@ -168,7 +169,8 @@ src_rcon_command_wait(src_rcon_t *r,
     }
 
     for (it = p; *it != NULL; it++) {
-        if ((*it)->id == cmd->id && strlen((char const *)(*it)->body) == 0) {
+        bool termination_string = strlen((char const *)(*it)->body) == 0;
+        if ((*it)->id == cmd->id && (single_packet_mode || termination_string)) {
             found = 1;
             break;
         }
@@ -208,10 +210,12 @@ src_rcon_message_t *src_rcon_auth(src_rcon_t *r, char const *password)
 rcon_error_t
 src_rcon_auth_wait(src_rcon_t *r,
                    src_rcon_message_t const *auth, size_t *o,
-                   void const *buf, size_t sz)
+                   void const *buf, size_t sz, int single_packet_mode)
 {
     src_rcon_message_t **p = NULL;
     size_t off = 0, count = 2;
+    size_t expect_count = single_packet_mode ? 1 : 2;
+    int auth_packet_offset = single_packet_mode ? 0 : 1;
     int ret = 0;
 
     ret = src_rcon_deserialize(r, &p, &off, &count, buf, sz);
@@ -219,25 +223,25 @@ src_rcon_auth_wait(src_rcon_t *r,
         return ret;
     }
 
-    if (count < 2) {
+    if (count < expect_count) {
         src_rcon_message_freev(p);
         return rcon_error_moredata;
     }
 
     if (p[0]->type != serverdata_value &&
-        p[1]->id != auth->id) {
+        p[auth_packet_offset]->id != auth->id) {
         src_rcon_message_freev(p);
         return rcon_error_protocol;
     }
 
-    if (p[1]->type != serverdata_auth_response) {
+    if (p[auth_packet_offset]->type != serverdata_auth_response) {
         src_rcon_message_freev(p);
         return rcon_error_protocol;
     }
 
     *o = off;
 
-    if (p[1]->id != auth->id) {
+    if (p[auth_packet_offset]->id != auth->id) {
         src_rcon_message_freev(p);
         return rcon_error_auth;
     }
