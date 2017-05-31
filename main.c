@@ -25,6 +25,7 @@ static char *password = NULL;
 static char *port = NULL;
 static char *config = NULL;
 static char *server = NULL;
+static int single_packet_mode = 0;
 
 static GByteArray *response = NULL;
 static src_rcon_t *r = NULL;
@@ -59,6 +60,7 @@ static void usage(void)
     puts(" -P, --password   RCON Password");
     puts(" -p, --port       Port or service");
     puts(" -s, --server     Use this server from config file");
+    puts(" -1, --1packet    Don't expect terminating packets (Factorio-compatible)");
 }
 
 static int parse_args(int ac, char **av)
@@ -70,10 +72,11 @@ static int parse_args(int ac, char **av)
         { "password", required_argument, 0, 'P' },
         { "port", required_argument, 0, 'p' },
         { "server", required_argument, 0, 's' },
+        { "1packet", no_argument, 0, '1' },
         { NULL, 0, 0, 0 }
     };
 
-    static char const *optstr = "c:H:hP:p:s:";
+    static char const *optstr = "c:H:hP:p:s:1";
 
     int c = 0;
 
@@ -85,6 +88,7 @@ static int parse_args(int ac, char **av)
         case 'p': free(port); port = strdup(optarg); break;
         case 'P': free(password); password = strdup(optarg); break;
         case 's': free(server); server = strdup(optarg); break;
+        case '1': single_packet_mode = 1; break;
         case 'h': usage(); exit(0); break;
         default: /* intentional */
         case '?': usage(); exit(1); break;
@@ -140,7 +144,7 @@ static int wait_auth(int sock, src_rcon_message_t *auth)
         g_byte_array_append(response, tmp, ret);
 
         status = src_rcon_auth_wait(r, auth, &off,
-                                    response->data, response->len);
+                                    response->data, response->len, single_packet_mode);
         if (status != rcon_error_moredata) {
             g_byte_array_remove_range(response, 0, off);
             return (int)status;
@@ -186,7 +190,7 @@ static int send_command(int sock, char const *cmd)
 
         g_byte_array_append(response, tmp, ret);
         status = src_rcon_command_wait(r, command, &commandanswers, &off,
-                                       response->data, response->len);
+                                       response->data, response->len, single_packet_mode);
         if (status != rcon_error_moredata) {
             g_byte_array_remove_range(response, 0, off);
             break;
@@ -308,7 +312,7 @@ int do_config(void)
     free(port);
     free(password);
 
-    if (config_host_data(server, &host, &port, &password)) {
+    if (config_host_data(server, &host, &port, &password, &single_packet_mode)) {
         fprintf(stderr, "Server %s not found in configuration\n", server);
         return 2;
     }

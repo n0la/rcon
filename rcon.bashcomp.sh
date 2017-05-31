@@ -6,8 +6,8 @@ _rcon()
 
     _init_completion || return
 
-    lngopts="--config --help --host --port --password --server"
-    shtopts="-c -H -h -p -P -s"
+    lngopts="--config --help --host --port --password --server --1packet"
+    shtopts="-c -H -h -p -P -s -1"
     configfile="$HOME/.rconrc"
 
     case "${prev}" in
