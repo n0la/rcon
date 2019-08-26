@@ -1,10 +1,13 @@
 #ifndef RCON_CONFIG_H
 #define RCON_CONFIG_H
 
-extern void config_free(void);
-extern int config_load(char const *file);
+#include <stdbool.h>
 
-extern int config_host_data(char const *name, char **hostname,
-                            char **port, char **passwd, int *single_packet_mode);
+void config_free(void);
+int config_load(char const *file);
+
+int config_host_data(char const *name, char **hostname,
+                     char **port, char **passwd,
+                     bool *single_packet_mode);
 
 #endif

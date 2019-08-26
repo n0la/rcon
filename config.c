@@ -50,7 +50,7 @@ void config_free(void)
 
 int config_host_data(char const *name, char **hostname,
                      char **service, char **passwd,
-                    int *single_packet_mode)
+                     bool *single_packet_mode)
 {
     gchar *h = NULL, *s = NULL, *p = NULL;
     bool single_packet;
@@ -77,8 +77,9 @@ int config_host_data(char const *name, char **hostname,
         *hostname = strdup(h);
     }
 
-    single_packet = g_key_file_get_boolean(config, name, CONFIG_KEY_SINGLE_PACKET, NULL);
-    *single_packet_mode = (single_packet ? 1 : 0);
+    single_packet = g_key_file_get_boolean(config, name,
+                                           CONFIG_KEY_SINGLE_PACKET, NULL);
+    *single_packet_mode = (single_packet == TRUE);
 
     if (service) {
         *service = strdup(s);

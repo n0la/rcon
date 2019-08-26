@@ -5,6 +5,10 @@
 #include "memstream.h"
 #include "fmemopen.h"
 
+#ifndef HAVE_ARC4RANDOM_UNIFORM
+#include <bsd/stdlib.h>
+#endif
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -91,11 +95,7 @@ static void src_rcon_message_update_size(src_rcon_message_t *m)
 
 static void src_rcon_message_random_id(src_rcon_message_t *m)
 {
-#ifdef HAVE_ARC4RANDOM_UNIFORM
     m->id = (int32_t)arc4random_uniform(INT32_MAX-1);
-#else
-    m->id = rand() % (INT32_MAX - 1);
-#endif
 }
 
 static rcon_error_t
@@ -254,7 +254,8 @@ src_rcon_auth_wait(src_rcon_t *r,
 rcon_error_t
 src_rcon_serialize(src_rcon_t *r,
                    src_rcon_message_t const *m,
-                   uint8_t **buf, size_t *sz)
+                   uint8_t **buf, size_t *sz,
+                   bool single_packet)
 {
     uint8_t *tmp = NULL;
     size_t size = 0;
@@ -278,7 +279,7 @@ src_rcon_serialize(src_rcon_t *r,
     fwrite(&m->null, 1, sizeof(m->null), str);
     fwrite(&m->null, 1, sizeof(m->null), str);
 
-    if (m->type == serverdata_command) {
+    if (m->type == serverdata_command && !single_packet) {
         uint8_t *mbuf = NULL;
         size_t msz = 0;
         src_rcon_message_t *marker = src_rcon_end_marker(m);
@@ -289,7 +290,7 @@ src_rcon_serialize(src_rcon_t *r,
             return rcon_error_memory;
         }
 
-        if (src_rcon_serialize(r, marker, &mbuf, &msz) != 0) {
+        if (src_rcon_serialize(r, marker, &mbuf, &msz, false) != 0) {
             fclose(str);
             free(tmp);
             src_rcon_message_free(marker);

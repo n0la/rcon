@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <getopt.h>
 #include <string.h>
+#include <stdbool.h>
 #include <errno.h>
 #include <ctype.h>
 #include <err.h>
@@ -25,7 +26,8 @@ static char *password = NULL;
 static char *port = NULL;
 static char *config = NULL;
 static char *server = NULL;
-static int single_packet_mode = 0;
+static bool single_packet_mode = true;
+static bool debug = false;
 
 static GByteArray *response = NULL;
 static src_rcon_t *r = NULL;
@@ -55,6 +57,7 @@ static void usage(void)
     puts("");
     puts("Options:");
     puts(" -c, --config     Alternate configuration file");
+    puts(" -d, --debug      Debug output");
     puts(" -h, --help       This bogus");
     puts(" -H, --host       Host name or IP");
     puts(" -P, --password   RCON Password");
@@ -67,6 +70,7 @@ static int parse_args(int ac, char **av)
 {
     static struct option opts[] = {
         { "config", required_argument, 0, 'c' },
+        { "debug", no_argument, 0, 'd' },
         { "help", no_argument, 0, 'h' },
         { "host", required_argument, 0, 'H' },
         { "password", required_argument, 0, 'P' },
@@ -84,11 +88,12 @@ static int parse_args(int ac, char **av)
         switch (c)
         {
         case 'c': free(config); config = strdup(optarg); break;
+        case 'd': debug = true; break;
         case 'H': free(host); host = strdup(optarg); break;
         case 'p': free(port); port = strdup(optarg); break;
         case 'P': free(password); password = strdup(optarg); break;
         case 's': free(server); server = strdup(optarg); break;
-        case '1': single_packet_mode = 1; break;
+        case '1': single_packet_mode = true; break;
         case 'h': usage(); exit(0); break;
         default: /* intentional */
         case '?': usage(); exit(1); break;
@@ -98,6 +103,28 @@ static int parse_args(int ac, char **av)
     return 0;
 }
 
+static void debug_dump(bool in, uint8_t const *data, size_t sz)
+{
+    if (!debug) {
+        return;
+    }
+
+    printf("%s ", (in ? ">>" : "<<"));
+
+    for (size_t i = 0; i < sz; i++) {
+        if (isprint((int)data[i])) {
+            fputc((int)data[i], stdout);
+        } else {
+            printf("0x%.2X", (int)data[i]);
+        }
+        if (i < sz-1) {
+            printf(",");
+        }
+    }
+
+    printf("\n");
+}
+
 static int send_message(int sock, src_rcon_message_t *msg)
 {
     uint8_t *data = NULL;
@@ -105,9 +132,11 @@ static int send_message(int sock, src_rcon_message_t *msg)
     size_t size = 0;
     int ret = 0;
 
-    if (src_rcon_serialize(r, msg, &data, &size)) {
+    if (src_rcon_serialize(r, msg, &data, &size, single_packet_mode)) {
         return -1;
     }
+
+    debug_dump(false, data, size);
 
     p = data;
     do {
@@ -141,10 +170,14 @@ static int wait_auth(int sock, src_rcon_message_t *auth)
             return -1;
         }
 
+        debug_dump(true, tmp, ret);
+
         g_byte_array_append(response, tmp, ret);
 
         status = src_rcon_auth_wait(r, auth, &off,
-                                    response->data, response->len, single_packet_mode);
+                                    response->data, response->len,
+                                    single_packet_mode
+            );
         if (status != rcon_error_moredata) {
             g_byte_array_remove_range(response, 0, off);
             return (int)status;
@@ -190,7 +223,9 @@ static int send_command(int sock, char const *cmd)
 
         g_byte_array_append(response, tmp, ret);
         status = src_rcon_command_wait(r, command, &commandanswers, &off,
-                                       response->data, response->len, single_packet_mode);
+                                       response->data, response->len,
+                                       single_packet_mode
+            );
         if (status != rcon_error_moredata) {
             g_byte_array_remove_range(response, 0, off);
             break;

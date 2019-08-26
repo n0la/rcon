@@ -66,7 +66,7 @@ START_TEST(srcrcon_serialise_auth)
     auth = src_rcon_auth(rcon, "test");
     ck_assert_msg(auth != NULL, "srcrcon: auth message allocation failed");
 
-    err = src_rcon_serialize(rcon, auth, &buf, &sz);
+    err = src_rcon_serialize(rcon, auth, &buf, &sz, false);
     ck_assert_msg(err == rcon_error_success,
                   "srcrcon: auth message serializing failed");
 
@@ -111,7 +111,7 @@ START_TEST(srcrcon_serialise_command)
     cmd = src_rcon_command(rcon, "asdf");
     ck_assert_msg(cmd != NULL, "srcrcon: command message allocation failed");
 
-    err = src_rcon_serialize(rcon, cmd, &buf, &sz);
+    err = src_rcon_serialize(rcon, cmd, &buf, &sz, false);
     ck_assert_msg(err == rcon_error_success,
                   "srcrcon: command message serializing failed");
 

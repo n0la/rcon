@@ -22,35 +22,36 @@ typedef struct {
     uint8_t null;
 } src_rcon_message_t;
 
-extern src_rcon_t *src_rcon_new(void);
-extern void src_rcon_free(src_rcon_t *msg);
+src_rcon_t *src_rcon_new(void);
+void src_rcon_free(src_rcon_t *msg);
 
-extern src_rcon_message_t *src_rcon_message_new(void);
-extern void src_rcon_message_free(src_rcon_message_t *m);
-extern void src_rcon_message_freev(src_rcon_message_t **msg);
+src_rcon_message_t *src_rcon_message_new(void);
+void src_rcon_message_free(src_rcon_message_t *m);
+void src_rcon_message_freev(src_rcon_message_t **msg);
 
-extern src_rcon_message_t *src_rcon_command(src_rcon_t *r, char const *cmd);
-extern rcon_error_t src_rcon_command_wait(src_rcon_t *r,
-                                          src_rcon_message_t const *cmd,
-                                          src_rcon_message_t ***replies,
-                                          size_t *off, void const *buf,
-                                          size_t size,
-                                          int single_packet_mode);
+src_rcon_message_t *src_rcon_command(src_rcon_t *r, char const *cmd);
+rcon_error_t src_rcon_command_wait(src_rcon_t *r,
+                                   src_rcon_message_t const *cmd,
+                                   src_rcon_message_t ***replies,
+                                   size_t *off, void const *buf,
+                                   size_t size,
+                                   int single_packet_mode);
 
-extern src_rcon_message_t *src_rcon_auth(src_rcon_t *r, char const *password);
-extern rcon_error_t src_rcon_auth_wait(src_rcon_t *r,
-                                       src_rcon_message_t const *auth,
-                                       size_t *off,
-                                       void const *buf, size_t sz,
-                                       int single_packet_mode);
+src_rcon_message_t *src_rcon_auth(src_rcon_t *r, char const *password);
+rcon_error_t src_rcon_auth_wait(src_rcon_t *r,
+                                src_rcon_message_t const *auth,
+                                size_t *off,
+                                void const *buf, size_t sz,
+                                int single_packet_mode);
 
-extern rcon_error_t src_rcon_serialize(src_rcon_t *r,
-                                       src_rcon_message_t const *m,
-                                       uint8_t **buf, size_t *sz);
+rcon_error_t src_rcon_serialize(src_rcon_t *r,
+                                src_rcon_message_t const *m,
+                                uint8_t **buf, size_t *sz,
+                                bool single_packet_mode);
 
-extern rcon_error_t src_rcon_deserialize(src_rcon_t *r,
-                                         src_rcon_message_t ***msg, size_t *off,
-                                         size_t *count, void const *buf,
-                                         size_t sz);
+rcon_error_t src_rcon_deserialize(src_rcon_t *r,
+                                  src_rcon_message_t ***msg, size_t *off,
+                                  size_t *count, void const *buf,
+                                  size_t sz);
 
 #endif
