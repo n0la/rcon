@@ -7,8 +7,8 @@ It will send commands to the given server, and print the reply to stdout.
 
 # Installation
 
-You require ```check```, ```cmake``` and ```glib-2.0``` to successfully build
-rcon:
+You require ```libbsd```, ```check```, ```cmake``` and ```glib-2.0```
+to successfully build rcon:
 
 ```shell
 $ mkdir build
