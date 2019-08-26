@@ -15,6 +15,7 @@ addons:
       - cmake-data
       - libglib2.0-dev
       - check
+      - libbsd-dev
 
 before_install:
   # TODO: remove once https://github.com/travis-ci/travis-ci/issues/5377 is done
