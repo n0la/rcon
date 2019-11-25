@@ -105,13 +105,15 @@ static int parse_args(int ac, char **av)
 
 static void debug_dump(bool in, uint8_t const *data, size_t sz)
 {
+    size_t i = 0;
+
     if (!debug) {
         return;
     }
 
     printf("%s ", (in ? ">>" : "<<"));
 
-    for (size_t i = 0; i < sz; i++) {
+    for (i = 0; i < sz; i++) {
         if (isprint((int)data[i])) {
             fputc((int)data[i], stdout);
         } else {
