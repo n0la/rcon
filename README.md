@@ -8,7 +8,14 @@ It will send commands to the given server, and print the reply to stdout.
 # Installation
 
 You require ```libbsd```, ```check```, ```cmake``` and ```glib-2.0```
-to successfully build rcon:
+to successfully build rcon. You have to install those from your distribution's
+repository. So for example on Debian you'd do something like this:
+
+```shell
+$ apt-get install build-essential cmake check libbsd-dev libglib2.0-dev
+```
+
+Then build the project:
 
 ```shell
 $ mkdir build
@@ -18,12 +25,12 @@ $ make
 $ sudo make install
 ```
 
-Per default a ```bash-completion``` script is installed as well, if you do not
-have or use bash completion simply specify ```INSTALL_BASH_COMPLETION=OFF``` on
+A ```bash-completion``` script is available, but not installed by default.
+If you use bash completion simply specify ```INSTALL_BASH_COMPLETION=ON``` on
 the cmake command line:
 
 ```shell
-$ cmake .. -DCMAKE_INSTALL_PREFIX=/usr -DINSTALL_BASH_COMPLETION=OFF
+$ cmake .. -DCMAKE_INSTALL_PREFIX=/usr -DINSTALL_BASH_COMPLETION=ON
 ```
 
 # Documentation
