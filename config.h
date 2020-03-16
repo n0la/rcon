@@ -7,7 +7,6 @@ void config_free(void);
 int config_load(char const *file);
 
 int config_host_data(char const *name, char **hostname,
-                     char **port, char **passwd,
-                     bool *single_packet_mode);
+                     char **port, char **passwd);
 
 #endif

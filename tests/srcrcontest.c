@@ -66,7 +66,7 @@ START_TEST(srcrcon_serialise_auth)
     auth = src_rcon_auth(rcon, "test");
     ck_assert_msg(auth != NULL, "srcrcon: auth message allocation failed");
 
-    err = src_rcon_serialize(rcon, auth, &buf, &sz, false);
+    err = src_rcon_serialize(rcon, auth, &buf, &sz);
     ck_assert_msg(err == rcon_error_success,
                   "srcrcon: auth message serializing failed");
 
@@ -111,7 +111,7 @@ START_TEST(srcrcon_serialise_command)
     cmd = src_rcon_command(rcon, "asdf");
     ck_assert_msg(cmd != NULL, "srcrcon: command message allocation failed");
 
-    err = src_rcon_serialize(rcon, cmd, &buf, &sz, false);
+    err = src_rcon_serialize(rcon, cmd, &buf, &sz);
     ck_assert_msg(err == rcon_error_success,
                   "srcrcon: command message serializing failed");
 
@@ -134,40 +134,6 @@ START_TEST(srcrcon_serialise_command)
 
     ck_assert_msg(buf[mk] == '\0', "srcrcon: last byte is not \\0");
     mk += 1;
-
-    ck_assert_msg(mk < sz, "srcrcon: command has no end marker");
-
-    /* Move pointer forward
-     */
-    buf = buf + mk;
-
-    /* Check for end marker
-     */
-
-    /* Check end marker. Size is always 10: (4 * 3 + 2) = 14 - sizeof(size)
-     */
-    ck_assert_msg(((int32_t*)buf)[0] == 10,
-                  "srcrcon: endmarker's first int32_t field is not size");
-    /* End marker ID must be the same as the command id
-     */
-    ck_assert_msg(((int32_t*)buf)[1] == cmd->id,
-                  "srcrcon: endmarker's second int32_t field is not the id");
-    ck_assert_msg(((int32_t*)buf)[2] == serverdata_value,
-                  "srcrcon: endmarker's third int32_t field is not the type");
-
-    mk = sizeof(uint32_t) * 3;
-    ck_assert_msg(mk <= (sz-2), "srcrcon: invalid remaining length");
-
-    ck_assert_msg(strcmp((char const *)buf+mk, "") == 0,
-                  "srcrcon: endmarker's data is not empty");
-    mk += 1;
-
-    ck_assert_msg(buf[mk] == '\0',
-                  "srcrcon: endmarker's end marker is not \\0");
-
-    mk += 1;
-
-    ck_assert_msg(mk == 14, "srcrcon: endmarker: did not reach end");
 }
 END_TEST
 

@@ -132,30 +132,12 @@ src_rcon_message_t *src_rcon_command(src_rcon_t *r, char const *cmd)
     return msg;
 }
 
-static src_rcon_message_t *src_rcon_end_marker(src_rcon_message_t const *cmd)
-{
-    src_rcon_message_t *msg = NULL;
-
-    msg = src_rcon_message_new();
-    if (msg == NULL) {
-        return NULL;
-    }
-
-    msg->type = serverdata_value;
-    msg->id = cmd->id;
-
-    src_rcon_message_update_size(msg);
-
-    return msg;
-}
-
 rcon_error_t
 src_rcon_command_wait(src_rcon_t *r,
                       src_rcon_message_t const *cmd,
                       src_rcon_message_t ***replies,
                       size_t *off, void const *buf,
-                      size_t size,
-                      int single_packet_mode)
+                      size_t size)
 {
     src_rcon_message_t **p = NULL, **it = NULL;
     int ret = 0;
@@ -170,7 +152,7 @@ src_rcon_command_wait(src_rcon_t *r,
 
     for (it = p; *it != NULL; it++) {
         bool termination_string = strlen((char const *)(*it)->body) == 0;
-        if ((*it)->id == cmd->id && (single_packet_mode || termination_string)) {
+        if ((*it)->id == cmd->id && termination_string) {
             found = 1;
             break;
         }
@@ -210,12 +192,12 @@ src_rcon_message_t *src_rcon_auth(src_rcon_t *r, char const *password)
 rcon_error_t
 src_rcon_auth_wait(src_rcon_t *r,
                    src_rcon_message_t const *auth, size_t *o,
-                   void const *buf, size_t sz, int single_packet_mode)
+                   void const *buf, size_t sz)
 {
     src_rcon_message_t **p = NULL;
     size_t off = 0, count = 2;
-    size_t expect_count = single_packet_mode ? 1 : 2;
-    int auth_packet_offset = single_packet_mode ? 0 : 1;
+    size_t expect_count = 1;
+    int auth_packet_offset = 0;
     int ret = 0;
 
     ret = src_rcon_deserialize(r, &p, &off, &count, buf, sz);
@@ -254,8 +236,7 @@ src_rcon_auth_wait(src_rcon_t *r,
 rcon_error_t
 src_rcon_serialize(src_rcon_t *r,
                    src_rcon_message_t const *m,
-                   uint8_t **buf, size_t *sz,
-                   bool single_packet)
+                   uint8_t **buf, size_t *sz)
 {
     uint8_t *tmp = NULL;
     size_t size = 0;
@@ -278,30 +259,6 @@ src_rcon_serialize(src_rcon_t *r,
     }
     fwrite(&m->null, 1, sizeof(m->null), str);
     fwrite(&m->null, 1, sizeof(m->null), str);
-
-    if (m->type == serverdata_command && !single_packet) {
-        uint8_t *mbuf = NULL;
-        size_t msz = 0;
-        src_rcon_message_t *marker = src_rcon_end_marker(m);
-
-        if (m == NULL) {
-            fclose(str);
-            free(tmp);
-            return rcon_error_memory;
-        }
-
-        if (src_rcon_serialize(r, marker, &mbuf, &msz, false) != 0) {
-            fclose(str);
-            free(tmp);
-            src_rcon_message_free(marker);
-            return rcon_error_internal;
-        }
-
-        fwrite(mbuf, 1, msz, str);
-
-        free(mbuf);
-        src_rcon_message_free(marker);
-    }
 
     fclose(str);
 

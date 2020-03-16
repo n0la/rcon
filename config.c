@@ -13,7 +13,6 @@
  */
 #define CONFIG_KEY_SERVICE  "port"
 #define CONFIG_KEY_PASSWORD "password"
-#define CONFIG_KEY_SINGLE_PACKET "single_packet"
 
 static GKeyFile *config = NULL;
 
@@ -49,11 +48,9 @@ void config_free(void)
 }
 
 int config_host_data(char const *name, char **hostname,
-                     char **service, char **passwd,
-                     bool *single_packet_mode)
+                     char **service, char **passwd)
 {
     gchar *h = NULL, *s = NULL, *p = NULL;
-    bool single_packet;
     return_if_true(config == NULL, -1);
 
     if (!g_key_file_has_group(config, name)) {
@@ -76,10 +73,6 @@ int config_host_data(char const *name, char **hostname,
     if (hostname) {
         *hostname = strdup(h);
     }
-
-    single_packet = g_key_file_get_boolean(config, name,
-                                           CONFIG_KEY_SINGLE_PACKET, NULL);
-    *single_packet_mode = (single_packet == TRUE);
 
     if (service) {
         *service = strdup(s);

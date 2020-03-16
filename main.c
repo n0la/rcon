@@ -26,7 +26,6 @@ static char *password = NULL;
 static char *port = NULL;
 static char *config = NULL;
 static char *server = NULL;
-static bool single_packet_mode = true;
 static bool debug = false;
 
 static GByteArray *response = NULL;
@@ -93,7 +92,7 @@ static int parse_args(int ac, char **av)
         case 'p': free(port); port = strdup(optarg); break;
         case 'P': free(password); password = strdup(optarg); break;
         case 's': free(server); server = strdup(optarg); break;
-        case '1': single_packet_mode = true; break;
+        case '1': /* backward compability */ break;
         case 'h': usage(); exit(0); break;
         default: /* intentional */
         case '?': usage(); exit(1); break;
@@ -134,7 +133,7 @@ static int send_message(int sock, src_rcon_message_t *msg)
     size_t size = 0;
     int ret = 0;
 
-    if (src_rcon_serialize(r, msg, &data, &size, single_packet_mode)) {
+    if (src_rcon_serialize(r, msg, &data, &size)) {
         return -1;
     }
 
@@ -177,8 +176,7 @@ static int wait_auth(int sock, src_rcon_message_t *auth)
         g_byte_array_append(response, tmp, ret);
 
         status = src_rcon_auth_wait(r, auth, &off,
-                                    response->data, response->len,
-                                    single_packet_mode
+                                    response->data, response->len
             );
         if (status != rcon_error_moredata) {
             g_byte_array_remove_range(response, 0, off);
@@ -225,8 +223,7 @@ static int send_command(int sock, char const *cmd)
 
         g_byte_array_append(response, tmp, ret);
         status = src_rcon_command_wait(r, command, &commandanswers, &off,
-                                       response->data, response->len,
-                                       single_packet_mode
+                                       response->data, response->len
             );
         if (status != rcon_error_moredata) {
             g_byte_array_remove_range(response, 0, off);
@@ -349,7 +346,7 @@ int do_config(void)
     free(port);
     free(password);
 
-    if (config_host_data(server, &host, &port, &password, &single_packet_mode)) {
+    if (config_host_data(server, &host, &port, &password)) {
         fprintf(stderr, "Server %s not found in configuration\n", server);
         return 2;
     }

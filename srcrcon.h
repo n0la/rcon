@@ -34,20 +34,17 @@ rcon_error_t src_rcon_command_wait(src_rcon_t *r,
                                    src_rcon_message_t const *cmd,
                                    src_rcon_message_t ***replies,
                                    size_t *off, void const *buf,
-                                   size_t size,
-                                   int single_packet_mode);
+                                   size_t size);
 
 src_rcon_message_t *src_rcon_auth(src_rcon_t *r, char const *password);
 rcon_error_t src_rcon_auth_wait(src_rcon_t *r,
                                 src_rcon_message_t const *auth,
                                 size_t *off,
-                                void const *buf, size_t sz,
-                                int single_packet_mode);
+                                void const *buf, size_t sz);
 
 rcon_error_t src_rcon_serialize(src_rcon_t *r,
                                 src_rcon_message_t const *m,
-                                uint8_t **buf, size_t *sz,
-                                bool single_packet_mode);
+                                uint8_t **buf, size_t *sz);
 
 rcon_error_t src_rcon_deserialize(src_rcon_t *r,
                                   src_rcon_message_t ***msg, size_t *off,
