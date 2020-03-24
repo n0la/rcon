@@ -27,6 +27,7 @@ static char *port = NULL;
 static char *config = NULL;
 static char *server = NULL;
 static bool debug = false;
+static bool nowait = false;
 
 static GByteArray *response = NULL;
 static src_rcon_t *r = NULL;
@@ -59,10 +60,11 @@ static void usage(void)
     puts(" -d, --debug      Debug output");
     puts(" -h, --help       This bogus");
     puts(" -H, --host       Host name or IP");
+    puts(" -n, --nowait     Don't wait for reply from server for commands.");
     puts(" -P, --password   RCON Password");
     puts(" -p, --port       Port or service");
     puts(" -s, --server     Use this server from config file");
-    puts(" -1, --1packet    Don't expect terminating packets (Factorio-compatible)");
+    puts(" -1, --1packet    Unused, backward compability");
 }
 
 static int parse_args(int ac, char **av)
@@ -72,6 +74,7 @@ static int parse_args(int ac, char **av)
         { "debug", no_argument, 0, 'd' },
         { "help", no_argument, 0, 'h' },
         { "host", required_argument, 0, 'H' },
+        { "nowait", no_argument, 0, 'n' },
         { "password", required_argument, 0, 'P' },
         { "port", required_argument, 0, 'p' },
         { "server", required_argument, 0, 's' },
@@ -79,7 +82,7 @@ static int parse_args(int ac, char **av)
         { NULL, 0, 0, 0 }
     };
 
-    static char const *optstr = "c:H:hP:p:s:1";
+    static char const *optstr = "c:H:hnP:p:s:1";
 
     int c = 0;
 
@@ -92,6 +95,7 @@ static int parse_args(int ac, char **av)
         case 'p': free(port); port = strdup(optarg); break;
         case 'P': free(password); password = strdup(optarg); break;
         case 's': free(server); server = strdup(optarg); break;
+        case 'n': nowait = true; break;
         case '1': /* backward compability */ break;
         case 'h': usage(); exit(0); break;
         default: /* intentional */
@@ -206,6 +210,10 @@ static int send_command(int sock, char const *cmd)
     }
 
     if (send_message(sock, command)) {
+        goto cleanup;
+    }
+
+    if (nowait == true) {
         goto cleanup;
     }
 
