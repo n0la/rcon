@@ -195,35 +195,32 @@ src_rcon_auth_wait(src_rcon_t *r,
                    void const *buf, size_t sz)
 {
     src_rcon_message_t **p = NULL;
-    size_t off = 0, count = 2;
-    size_t expect_count = 1;
-    int auth_packet_offset = 0;
-    int ret = 0;
+    src_rcon_message_t *a = NULL;
+    size_t off = 0, count = 0;
+    int ret = 0, i = 0;
 
     ret = src_rcon_deserialize(r, &p, &off, &count, buf, sz);
     if (ret) {
         return ret;
     }
 
-    if (count < expect_count) {
-        src_rcon_message_freev(p);
-        return rcon_error_moredata;
+    for (i = 0; i < count; i++) {
+        if (p[i]->type == serverdata_auth_response) {
+            a = p[i];
+            break;
+        }
     }
 
-    if (p[0]->type != serverdata_value &&
-        p[auth_packet_offset]->id != auth->id) {
-        src_rcon_message_freev(p);
-        return rcon_error_protocol;
-    }
-
-    if (p[auth_packet_offset]->type != serverdata_auth_response) {
+    if (a == NULL) {
+        /* no auth response in reply
+         */
         src_rcon_message_freev(p);
         return rcon_error_protocol;
     }
 
     *o = off;
 
-    if (p[auth_packet_offset]->id != auth->id) {
+    if (a->id != auth->id) {
         src_rcon_message_freev(p);
         return rcon_error_auth;
     }
