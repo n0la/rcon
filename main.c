@@ -193,7 +193,7 @@ static int wait_auth(int sock, src_rcon_message_t *auth)
 
 static int send_command(int sock, char const *cmd)
 {
-    src_rcon_message_t *command = NULL;
+    src_rcon_message_t *command = NULL, *end = NULL;
     src_rcon_message_t **commandanswers = NULL;
     src_rcon_message_t **p = NULL;
     uint8_t tmp[512];
@@ -201,6 +201,7 @@ static int send_command(int sock, char const *cmd)
     rcon_error_t status;
     size_t off = 0;
     int ec = -1;
+    bool done = false;
 
     /* Send command
      */
@@ -214,6 +215,15 @@ static int send_command(int sock, char const *cmd)
     }
 
     if (nowait == true) {
+        goto cleanup;
+    }
+
+    end = src_rcon_command(r, "");
+    if (end == NULL) {
+        goto cleanup;
+    }
+
+    if (send_message(sock, end)) {
         goto cleanup;
     }
 
@@ -235,22 +245,31 @@ static int send_command(int sock, char const *cmd)
             );
         if (status != rcon_error_moredata) {
             g_byte_array_remove_range(response, 0, off);
-            break;
         }
-    } while (true);
 
-    if (commandanswers != NULL) {
-        for (p = commandanswers; *p != NULL; p++) {
-            fprintf(stdout, "%s", (char const*)(*p)->body);
-            fflush(stdout);
+        if (status == rcon_error_success) {
+            if (commandanswers != NULL) {
+                for (p = commandanswers; *p != NULL; p++) {
+                    if ((*p)->id == end->id) {
+                        done = true;
+                    } else {
+                        fprintf(stdout, "%s", (char const*)(*p)->body);
+                        fflush(stdout);
+                    }
+                }
+            }
         }
-    }
+
+        src_rcon_message_freev(commandanswers);
+        commandanswers = NULL;
+    } while (!done);
 
     ec = 0;
 
 cleanup:
 
     src_rcon_message_free(command);
+    src_rcon_message_free(end);
     src_rcon_message_freev(commandanswers);
 
     return ec;
