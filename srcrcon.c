@@ -204,6 +204,11 @@ src_rcon_auth_wait(src_rcon_t *r,
         return ret;
     }
 
+    if (count < 2) {
+        src_rcon_message_freev(p);
+        return rcon_error_moredata;
+    }
+
     for (i = 0; i < count; i++) {
         if (p[i]->type == serverdata_auth_response) {
             a = p[i];
