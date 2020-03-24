@@ -139,27 +139,17 @@ src_rcon_command_wait(src_rcon_t *r,
                       size_t *off, void const *buf,
                       size_t size)
 {
-    src_rcon_message_t **p = NULL, **it = NULL;
+    src_rcon_message_t **p = NULL;
     int ret = 0;
     size_t count = 0;
     size_t o = 0;
-    int found = 0;
 
     ret = src_rcon_deserialize(r, &p, &o, &count, buf, size);
     if (ret) {
         return ret;
     }
 
-    for (it = p; *it != NULL; it++) {
-        bool termination_string = strlen((char const *)(*it)->body) == 0;
-        if ((*it)->id == cmd->id && termination_string) {
-            found = 1;
-            break;
-        }
-    }
-
-    if (!found) {
-        src_rcon_message_freev(p);
+    if (count < 0) {
         return rcon_error_moredata;
     }
 
