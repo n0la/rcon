@@ -1,4 +1,4 @@
-.TH RCON 1 "September 19, 2016" "version 0.1" "USER COMMANDS"
+.TH RCON 1 "September 19, 2016" "version 0.5" "USER COMMANDS"
 .SH NAME
 rcon \- command line source rcon client
 .SH SYNOPSIS
@@ -12,12 +12,20 @@ rcon can be used as a command line remote console client for source game servers
 Specify an alternate path to the configuration file. Default is $HOME/.rconrc
 .
 .TP
+\fB\-d \-\-debug\fR
+Enable debug mode. Sent and received packages are shown on terminal.
+.
+.TP
 \fB\-h \-\-help\fR
 Usage
 .
 .TP
 \fB\-H \-\-host\fR hostname
 Hostname or IP address of the server
+.
+.TP
+\fB\-n \-\-nowait\fR
+Do not wait for a reply from the server, just send and quit.
 .
 .TP
 \fB\-p \-\-port\fR port
@@ -56,7 +64,7 @@ The command line still trumps the configuration file, so the following would ove
 
 .SH INTERPRETER
 
-rcon can also be used as script interpreter. Just specify the rcon binary in the she bang. Lines starting with a hash sign (#) are ignored, other non-empty lines are being treated as commands. The following script runs two commands:
+rcon can also be used as script interpreter. Just specify the rcon binary in the she bang. Lines starting with a hash sign are ignored, other non-empty lines are being treated as commands. The following script runs two commands:
 
   #!/usr/bin/rcon -s myserver
 
@@ -81,4 +89,4 @@ Send a patch of commands to server:
 Report bugs at https://github.com/n0la/rcon
 
 .SH AUTHOR
-Copyright (c) 2016 Florian Stinglmayr <florian@n0la.org>
+Copyright (c) 2016 Florian Stinglmayr <fstinglmayr@gmail.com>
