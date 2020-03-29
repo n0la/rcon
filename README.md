@@ -32,6 +32,9 @@ the cmake command line:
 ```shell
 $ cmake .. -DCMAKE_INSTALL_PREFIX=/usr -DINSTALL_BASH_COMPLETION=ON
 ```
+# ArchLinux
+
+From AUR repo: https://aur.archlinux.org/packages/rcon-git
 
 # Documentation
 
