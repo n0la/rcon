@@ -1,11 +1,11 @@
-[![Build Status](https://travis-ci.org/n0la/rcon.svg?branch=master)](https://travis-ci.org/n0la/rcon)
-
-# rcon
-
 rcon is a command line application that can be used as a Source RCON client.
 It will send commands to the given server, and print the reply to stdout.
 
 # Installation
+
+[![Packaging status](https://repology.org/badge/vertical-allrepos/rcon.svg)](https://repology.org/project/rcon/versions)
+
+# Manual Installation
 
 You require ```libbsd```, ```check```, ```cmake``` and ```glib-2.0```
 to successfully build rcon. You have to install those from your distribution's
@@ -32,9 +32,6 @@ the cmake command line:
 ```shell
 $ cmake .. -DCMAKE_INSTALL_PREFIX=/usr -DINSTALL_BASH_COMPLETION=ON
 ```
-# ArchLinux
-
-From AUR repo: https://aur.archlinux.org/packages/rcon-git
 
 # Documentation
 
