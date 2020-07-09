@@ -5,6 +5,14 @@ It will send commands to the given server, and print the reply to stdout.
 
 [![Packaging status](https://repology.org/badge/vertical-allrepos/rcon.svg)](https://repology.org/project/rcon/versions)
 
+## Homebrew
+
+@Holek has made a homebrew tap for rcon, which you can use like this:
+
+```
+$ brew install Holek/rcon/rcon
+```
+
 # Manual Installation
 
 You require ```libbsd```, ```check```, ```cmake``` and ```glib-2.0```
