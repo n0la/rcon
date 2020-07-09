@@ -7,7 +7,9 @@ It will send commands to the given server, and print the reply to stdout.
 
 ## Homebrew
 
-@Holek has made a homebrew tap for rcon, which you can use like this:
+[@Holek](https://github.com/Holek) has made a
+[homebrew tap](https://github.com/Holek/homebrew-rcon) for rcon, which you can
+use like this:
 
 ```
 $ brew install Holek/rcon/rcon
