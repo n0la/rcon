@@ -121,6 +121,9 @@ Here is an example configuration file:
 hostname = 174.53.163.41
 port = 27045
 password = somepass
+# remove the following line if the server
+# is not minecraft, or set it to 'false'
+minecraft = true
 ```
 
 Now you can do:
