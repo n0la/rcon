@@ -393,7 +393,7 @@ int do_config(void)
     free(port);
     free(password);
 
-    if (config_host_data(server, &host, &port, &password)) {
+    if (config_host_data(server, &host, &port, &password, &minecraft)) {
         fprintf(stderr, "Server %s not found in configuration\n", server);
         return 2;
     }

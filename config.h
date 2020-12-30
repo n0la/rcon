@@ -7,6 +7,6 @@ void config_free(void);
 int config_load(char const *file);
 
 int config_host_data(char const *name, char **hostname,
-                     char **port, char **passwd);
+                     char **port, char **passwd, bool *minecraft);
 
 #endif

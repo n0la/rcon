@@ -13,6 +13,7 @@
  */
 #define CONFIG_KEY_SERVICE  "port"
 #define CONFIG_KEY_PASSWORD "password"
+#define CONFIG_KEY_MINECRAFT "minecraft"
 
 static GKeyFile *config = NULL;
 
@@ -48,9 +49,12 @@ void config_free(void)
 }
 
 int config_host_data(char const *name, char **hostname,
-                     char **service, char **passwd)
+                     char **service, char **passwd,
+                     bool *minecraft)
 {
     gchar *h = NULL, *s = NULL, *p = NULL;
+    gboolean mc = FALSE;
+
     return_if_true(config == NULL, -1);
 
     if (!g_key_file_has_group(config, name)) {
@@ -69,6 +73,7 @@ int config_host_data(char const *name, char **hostname,
     }
 
     p = g_key_file_get_string(config, name, CONFIG_KEY_PASSWORD, NULL);
+    mc = g_key_file_get_boolean(config, name, CONFIG_KEY_MINECRAFT, NULL);
 
     if (hostname) {
         *hostname = strdup(h);
@@ -80,6 +85,10 @@ int config_host_data(char const *name, char **hostname,
 
     if (passwd && p) {
         *passwd = strdup(p);
+    }
+
+    if (minecraft) {
+        *minecraft = mc;
     }
 
     g_free(h);
