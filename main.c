@@ -82,7 +82,7 @@ static int parse_args(int ac, char **av)
         { NULL, 0, 0, 0 }
     };
 
-    static char const *optstr = "c:H:hnP:p:s:1";
+    static char const *optstr = "c:dH:hnP:p:s:1";
 
     int c = 0;
 
