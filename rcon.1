@@ -24,6 +24,10 @@ Usage
 Hostname or IP address of the server
 .
 .TP
+\fB\-m \-\-minecraft\fR
+Minecraft compability mode.
+.
+.TP
 \fB\-n \-\-nowait\fR
 Do not wait for a reply from the server, just send and quit.
 .
@@ -51,6 +55,8 @@ The configuration file must be in the key file format (commonly known as INI fil
   hostname = 173.43.63.111
   port = 27003
   password = somepass
+  # remove the line below if it the server is not minecraft
+  minecraft = true
 
 This server can then be used from the command line with the
 .B -s
