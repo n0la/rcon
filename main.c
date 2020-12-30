@@ -28,6 +28,7 @@ static char *config = NULL;
 static char *server = NULL;
 static bool debug = false;
 static bool nowait = false;
+static bool minecraft = false;
 
 static GByteArray *response = NULL;
 static src_rcon_t *r = NULL;
@@ -60,6 +61,7 @@ static void usage(void)
     puts(" -d, --debug      Debug output");
     puts(" -h, --help       This bogus");
     puts(" -H, --host       Host name or IP");
+    puts(" -m, --minecraft  Minecraft mode");
     puts(" -n, --nowait     Don't wait for reply from server for commands.");
     puts(" -P, --password   RCON Password");
     puts(" -p, --port       Port or service");
@@ -74,6 +76,7 @@ static int parse_args(int ac, char **av)
         { "debug", no_argument, 0, 'd' },
         { "help", no_argument, 0, 'h' },
         { "host", required_argument, 0, 'H' },
+        { "minecraft", no_argument, 0, 'm' },
         { "nowait", no_argument, 0, 'n' },
         { "password", required_argument, 0, 'P' },
         { "port", required_argument, 0, 'p' },
@@ -82,7 +85,7 @@ static int parse_args(int ac, char **av)
         { NULL, 0, 0, 0 }
     };
 
-    static char const *optstr = "c:dH:hnP:p:s:1";
+    static char const *optstr = "c:dH:hmnP:p:s:1";
 
     int c = 0;
 
@@ -92,6 +95,7 @@ static int parse_args(int ac, char **av)
         case 'c': free(config); config = strdup(optarg); break;
         case 'd': debug = true; break;
         case 'H': free(host); host = strdup(optarg); break;
+        case 'm': minecraft = true; break;
         case 'p': free(port); port = strdup(optarg); break;
         case 'P': free(password); password = strdup(optarg); break;
         case 's': free(server); server = strdup(optarg); break;
@@ -218,13 +222,18 @@ static int send_command(int sock, char const *cmd)
         goto cleanup;
     }
 
-    end = src_rcon_command(r, "");
-    if (end == NULL) {
-        goto cleanup;
-    }
-
-    if (send_message(sock, end)) {
-        goto cleanup;
+    if (!minecraft) {
+        /* minecraft does not like the empty command at the end.
+         * it will abort the connection if it finds an empty command
+         * and we get no answer back.
+         */
+        end = src_rcon_command(r, "");
+        if (end == NULL) {
+            goto cleanup;
+        }
+        if (send_message(sock, end)) {
+            goto cleanup;
+        }
     }
 
     do {
@@ -236,7 +245,7 @@ static int send_command(int sock, char const *cmd)
 
         if (ret == 0) {
             fprintf(stderr, "Peer: connection closed\n");
-            return 0;
+            done = true;
         }
 
         g_byte_array_append(response, tmp, ret);
@@ -250,11 +259,17 @@ static int send_command(int sock, char const *cmd)
         if (status == rcon_error_success) {
             if (commandanswers != NULL) {
                 for (p = commandanswers; *p != NULL; p++) {
-                    if ((*p)->id == end->id) {
+                    if (!minecraft && (*p)->id == end->id) {
                         done = true;
                     } else {
                         fprintf(stdout, "%s", (char const*)(*p)->body);
                         fflush(stdout);
+
+                        /* in minecraft mode we are done after the first message
+                         */
+                        if (minecraft) {
+                            done = true;
+                        }
                     }
                 }
             }
@@ -490,6 +505,7 @@ int main(int ac, char **av)
         }
     }
 
+    puts("");
 
     ec = 0;
 
