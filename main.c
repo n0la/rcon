@@ -262,8 +262,13 @@ static int send_command(int sock, char const *cmd)
                     if (!minecraft && (*p)->id == end->id) {
                         done = true;
                     } else {
+                        size_t bodylen = strlen((char const*)(*p)->body);
+
                         fprintf(stdout, "%s", (char const*)(*p)->body);
-                        fflush(stdout);
+
+                        if (bodylen > 0 && (*p)->body[bodylen-1] != '\n') {
+                            fprintf(stdout, "\n");
+                        }
 
                         /* in minecraft mode we are done after the first message
                          */
@@ -504,8 +509,6 @@ int main(int ac, char **av)
             goto cleanup;
         }
     }
-
-    puts("");
 
     ec = 0;
 
