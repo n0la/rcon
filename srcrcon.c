@@ -194,7 +194,11 @@ src_rcon_auth_wait(src_rcon_t *r,
         return ret;
     }
 
-    if (count < 2) {
+    if (count == 1 && p[0]->type == serverdata_value) {
+        /* well behaved rcon servers send two messages upon an auth:
+         *   one with type == 0, as a sort of "ACK" that it received us
+         *   second with type == 3, auth response
+         */
         src_rcon_message_freev(p);
         return rcon_error_moredata;
     }
