@@ -16,9 +16,9 @@ addons:
       - libglib2.0-dev
       - check
       - libbsd-dev
-
-before_install:
-  - "if [ ${TRAVIS_OS_NAME} = 'osx' ]; then brew install check; fi"
+  homebrew:
+    packages:
+      - check
 
 before_script:
   - mkdir build
