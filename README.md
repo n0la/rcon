@@ -28,7 +28,7 @@ $ apt-get install build-essential cmake check libbsd-dev libglib2.0-dev
 
 - In Fedora you'd do something like this:
 ```shell
-$ dnf install @development-tools cmake check-devel libbsd-devel glib2-devel
+$ dnf install @c-development cmake check-devel libbsd-devel glib2-devel
 ```
 
 Then build the project:
