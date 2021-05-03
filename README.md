@@ -19,10 +19,16 @@ $ brew install Holek/rcon/rcon
 
 You require ```libbsd```, ```check```, ```cmake``` and ```glib-2.0```
 to successfully build rcon. You have to install those from your distribution's
-repository. So for example on Debian you'd do something like this:
+repository. For example:
 
+- In Debian you'd do something like this:
 ```shell
 $ apt-get install build-essential cmake check libbsd-dev libglib2.0-dev
+```
+
+- In Fedora you'd do something like this:
+```shell
+$ dnf install @c-development cmake check-devel libbsd-devel glib2-devel
 ```
 
 Then build the project:
