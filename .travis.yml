@@ -17,6 +17,10 @@ addons:
       - check
       - libbsd-dev
 
+before_install:
+  - "if [ ${TRAVIS_OS_NAME} = 'osx' ]; then brew update; fi"
+  - "if [ ${TRAVIS_OS_NAME} = 'osx' ]; then brew install check; fi"
+
 before_script:
   - mkdir build
   - cd build
