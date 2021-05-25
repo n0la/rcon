@@ -92,11 +92,5 @@ set(CPACK_RPM_PACKAGE_LICENSE "BSD-2-Clause")
 set(CPACK_DEBIAN_FILE_NAME "DEB-DEFAULT")
 set(CPACK_DEBIAN_PACKAGE_MAINTAINER "$ENV{USER}")
 
-## Windows - Use WiX tools with the flag -DCPACK_GENERATOR=WIX
-#if("${CMAKE_SYSTEM_NAME}" STREQUAL "Windows")
-#	set(CPACK_PACKAGE_ICON "${CMAKE_SOURCE_DIR}/assets\\\\logo.png")
-#	set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_SOURCE_DIR}/assets/LICENSE.txt")
-#endif()
-
 # Use CPack
 include(CPack)
