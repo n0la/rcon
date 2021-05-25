@@ -49,6 +49,34 @@ the cmake command line:
 $ cmake .. -DCMAKE_INSTALL_PREFIX=/usr -DINSTALL_BASH_COMPLETION=ON
 ```
 
+## Installation through your package manager
+
+You need the same dependencies as with the manual installation. But the steps
+are a little different:
+
+1. Create the build directory:
+    ```shell
+    $ mkdir build
+    $ cd build
+    ```
+2. Configure the build system:
+    - If you're on a debian-based distro:
+        ```shell
+        $ cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_BINARY_DEB=ON
+        ```
+    - If you're on a RHEL based distro:
+        ```shell
+        $ cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_BINARY_RPM=ON
+        ```
+3. Build and package the project:
+    ```shell
+    $ cmake --build . --target package
+    ```
+4. Install the package with your package manager, you'll find the file in the build folder.
+
+Remember to use `-DINSTALL_BASH_COMPLETION=ON` on the second step if you also
+want the bash completion script to be installed.
+
 # Documentation
 
 The utility comes with a man page: ```rcon(1)```. View it with:

@@ -75,3 +75,22 @@ ENDIF()
 
 ENABLE_TESTING()
 ADD_SUBDIRECTORY(tests)
+
+# CPack
+# Common variables to all packagers
+set(CPACK_PACKAGE_NAME "rcon")
+set(CPACK_PACKAGE_VERSION "0.6")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "A source RCON client, sends commands to a server and prints the reply to stdout.")
+set(CPACK_PACKAGE_HOMEPAGE_URL "https://github.com/n0la/rcon")
+set(CPACK_PACKAGE_DESCRIPTION_FILE "${CMAKE_SOURCE_DIR}/description.txt")
+
+# RPM (RHEL-based distros) - Use -DCMAKE_BINARY_RPM=ON flag to enable it
+set(CPACK_RPM_FILE_NAME "RPM-DEFAULT")
+set(CPACK_RPM_PACKAGE_LICENSE "BSD-2-Clause")
+
+# DEB (Debian-based distros) - Use -DCMAKE_BINARY_DEB=ON flag to enable it
+set(CPACK_DEBIAN_FILE_NAME "DEB-DEFAULT")
+set(CPACK_DEBIAN_PACKAGE_MAINTAINER "$ENV{USER}")
+
+# Use CPack
+include(CPack)
