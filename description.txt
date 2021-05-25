@@ -1,0 +1,1 @@
+rcon is a command line application that can be used as a Source RCON client. It will send commands to the given server, and print the reply to stdout.
