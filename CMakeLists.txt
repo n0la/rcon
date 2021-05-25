@@ -86,7 +86,7 @@ set(CPACK_PACKAGE_DESCRIPTION_FILE "${CMAKE_SOURCE_DIR}/description.txt")
 
 # RPM (RHEL-based distros) - Use -DCMAKE_BINARY_RPM=ON flag to enable it
 set(CPACK_RPM_FILE_NAME "RPM-DEFAULT")
-set(CPACK_RPM_PACKAGE_LICENSE "BSD")
+set(CPACK_RPM_PACKAGE_LICENSE "BSD-2-Clause")
 
 # DEB (Debian-based distros) - Use -DCMAKE_BINARY_DEB=ON flag to enable it
 set(CPACK_DEBIAN_FILE_NAME "DEB-DEFAULT")
