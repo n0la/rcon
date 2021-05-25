@@ -79,7 +79,7 @@ ADD_SUBDIRECTORY(tests)
 # CPack
 # Common variables to all packagers
 set(CPACK_PACKAGE_NAME "rcon")
-set(CPACK_PACKAGE_VERSION "1.0.0")
+set(CPACK_PACKAGE_VERSION "0.6")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "A source RCON client, sends commands to a server and prints the reply to stdout.")
 set(CPACK_PACKAGE_HOMEPAGE_URL "https://github.com/n0la/rcon")
 set(CPACK_PACKAGE_DESCRIPTION_FILE "${CMAKE_SOURCE_DIR}/description.txt")
