@@ -3,10 +3,10 @@ Maintainer: Florian Stinglmayr <fstinglmayr@gmail.com>
 Section: misc
 Priority: optional
 Build-Depends:
+  check,
   cmake,
   debhelper-compat (= 12),
   libbsd-dev,
-  libcmocka-dev,
   libglib2.0-dev,
   pkg-config,
 Standards-Version: 4.5.1
