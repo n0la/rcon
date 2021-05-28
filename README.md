@@ -15,7 +15,7 @@ use like this:
 $ brew install Holek/rcon/rcon
 ```
 
-# Manual Installation
+## Manual Installation
 
 You require ```libbsd```, ```check```, ```cmake``` and ```glib-2.0```
 to successfully build rcon. You have to install those from your distribution's
@@ -48,6 +48,19 @@ the cmake command line:
 ```shell
 $ cmake .. -DCMAKE_INSTALL_PREFIX=/usr -DINSTALL_BASH_COMPLETION=ON
 ```
+
+## Debian package
+
+If you prefer to build a Ubuntu/Debian package out of the source code: You can!
+Just run the following command in the source code:
+
+```
+$ dpkg-buildpackage -b -uc -us
+```
+
+You will need the `dpkg-dev` package of course, which contains
+`dpkg-buildpackage`, and all the dependencies as they are listed in the manual
+installation section above.
 
 # Documentation
 
