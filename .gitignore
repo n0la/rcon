@@ -1,1 +1,7 @@
 /build/
+/debian/files
+/debian/rcon.substvars
+/debian/.debhelper/
+/debian/debhelper-build-stamp
+/debian/rcon/
+

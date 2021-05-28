@@ -1,0 +1,24 @@
+Source: rcon
+Maintainer: Florian Stinglmayr <fstinglmayr@gmail.com>
+Section: misc
+Priority: optional
+Build-Depends:
+  cmake,
+  debhelper-compat (= 12),
+  libbsd-dev,
+  libcmocka-dev,
+  libglib2.0-dev,
+  pkg-config,
+Standards-Version: 4.5.1
+Homepage: https://github.com/n0la/rcon
+Vcs-Browser: https://github.com/n0la/rcon
+
+Package: rcon
+Architecture: any
+Depends:
+  ${shlibs:Depends},
+  ${misc:Depends},
+Description: command line Source rcon client
+ rcon is a command line rcon client for games that implement
+ the Valve Source RCON protocol. It takes commands via command
+ line and prints out server replies onto stdout.
