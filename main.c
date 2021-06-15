@@ -436,8 +436,13 @@ int main(int ac, char **av)
     ac -= optind;
     av += optind;
 
-    if (host == NULL || port == NULL) {
-        fprintf(stderr, "No host and/or port specified\n");
+    if (host == NULL) {
+        fprintf(stderr, "No host specified\n");
+        return 1;
+    }
+
+    if (port == NULL) {
+        fprintf(stderr, "No port specified\n");
         return 1;
     }
 
