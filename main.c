@@ -350,6 +350,13 @@ static int handle_stdin(int sock)
             continue;
         }
 
+       /* line containing only "q"
+         */
+        if (strcmp(cmd,"q") == 0) {
+	    ec = 1;
+	    break;
+        }
+
         if (send_command(sock, cmd)) {
             ec = -1;
             break;
