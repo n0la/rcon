@@ -21,6 +21,7 @@
 #include <netdb.h>
 #include <unistd.h>
 #include <arpa/inet.h>
+#include <time.h>
 
 static char *host = NULL;
 static char *password = NULL;
@@ -28,6 +29,7 @@ static char *port = NULL;
 static char *config = NULL;
 static char *server = NULL;
 static bool debug = false;
+static bool jstatus = false;
 static bool nowait = false;
 static bool minecraft = false;
 
@@ -68,6 +70,7 @@ static void usage(void)
     puts(" -p, --port       Port or service");
     puts(" -s, --server     Use this server from config file");
     puts(" -1, --1packet    Unused, backward compability");
+    puts(" -j, --status     Continuously report status to stdout");
 }
 
 static int parse_args(int ac, char **av)
@@ -83,10 +86,11 @@ static int parse_args(int ac, char **av)
         { "port", required_argument, 0, 'p' },
         { "server", required_argument, 0, 's' },
         { "1packet", no_argument, 0, '1' },
+        { "status", no_argument, 0, 'j' },
         { NULL, 0, 0, 0 }
     };
 
-    static char const *optstr = "c:dH:hmnP:p:s:1";
+    static char const *optstr = "c:dH:hmnP:p:s:1j";
 
     int c = 0;
 
@@ -103,6 +107,7 @@ static int parse_args(int ac, char **av)
         case 'n': nowait = true; break;
         case '1': /* backward compability */ break;
         case 'h': usage(); exit(0); break;
+        case 'j': jstatus = true; break;
         default: /* intentional */
         case '?': usage(); exit(1); break;
         }
@@ -368,6 +373,40 @@ static int handle_stdin(int sock)
     return ec;
 }
 
+static int handle_status(int sock)
+{
+    char line[] = "status";
+    int ec = 0;
+    // variables to store the date and time
+//    int hours, minutes, seconds, day, month, year;
+    time_t now;
+
+    while (1) {
+        char *cmd = line;
+
+       /* check for "q" keypress ... todo
+         */
+
+	system("clear"); /*clear output screen*/
+
+	/* print time hack */
+    	/* Obtain current time */
+    	time(&now);
+ 
+    	/* Convert to local time format and print to stdout */
+    	printf("%s", ctime(&now));
+
+        if (send_command(sock, cmd)) {
+            ec = -1;
+            break;
+        }
+	
+	sleep(3);
+    }
+
+    return ec;
+}
+
 int do_config(void)
 {
     if (server == NULL) {
@@ -524,6 +563,10 @@ int main(int ac, char **av)
 
     if (ac > 0) {
         if (handle_arguments(sock, ac, av)) {
+            goto cleanup;
+        }
+    } else if (jstatus) {
+        if (handle_status(sock)) {
             goto cleanup;
         }
     } else {
