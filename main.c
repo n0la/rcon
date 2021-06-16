@@ -20,6 +20,7 @@
 #include <sys/socket.h>
 #include <netdb.h>
 #include <unistd.h>
+#include <arpa/inet.h>
 
 static char *host = NULL;
 static char *password = NULL;
@@ -404,6 +405,7 @@ int do_config(void)
 int main(int ac, char **av)
 {
     struct addrinfo *info = NULL, *ai = NULL, hint = {0};
+    struct sockaddr_in *addr;
     src_rcon_message_t *auth = NULL;
     src_rcon_message_t **authanswers = NULL;
     int sock = 0;
@@ -448,7 +450,7 @@ int main(int ac, char **av)
 
     memset(&hint, 0, sizeof(hint));
     hint.ai_socktype = SOCK_STREAM;
-    hint.ai_family = AF_UNSPEC;
+    hint.ai_family = AF_INET;
     hint.ai_flags = AI_PASSIVE;
 
     if ((ret = getaddrinfo(host, port, &hint, &info))) {
@@ -461,19 +463,25 @@ int main(int ac, char **av)
     for (ai = info; ai != NULL; ai = ai->ai_next ) {
         sock = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
         if (sock < 0) {
+	    printf ("Error opening socket: %s\n",strerror(errno));
             continue;
         }
 
+	addr = (struct sockaddr_in *)ai->ai_addr; 
+	printf("Connecting to: %s\n",inet_ntoa((struct in_addr)addr->sin_addr));
+
         if (connect(sock, ai->ai_addr, ai->ai_addrlen) == 0) {
             break;
-        }
+        } else {
+	    printf ("Error connecting to socket: %s\n",strerror(errno));
+	}
 
         close(sock);
         sock = -1;
     }
 
     if (sock < 0) {
-        fprintf(stderr, "Failed to connect to the given host/service\n");
+        fprintf(stderr, "Failed to connect to the given host/port\n");
         goto cleanup;
     }
 
@@ -504,6 +512,8 @@ int main(int ac, char **av)
             goto cleanup;
         }
     }
+
+    printf ("Authorization successful...\n");
 
     if (ac > 0) {
         if (handle_arguments(sock, ac, av)) {
