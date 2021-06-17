@@ -437,6 +437,7 @@ static int handle_status(int sock)
     char line[100000];
     char statusline[500];
     char * pch;
+    char * pch2;
     int icount;
 
     if(start_ncurses()) return -1;
@@ -494,8 +495,13 @@ static int handle_status(int sock)
 	}	
 	while (pch != NULL) {
 		strcpy(pch+64,pch+75);
+		if ( icount > 8 ) {
+			pch2=strrchr(pch,':');
+			if ( pch2 != NULL ) *pch2 = '\000';
+		}
 		wprintw(inputwin,"%s\n",pch);
 		pch = strtok (NULL, "\n");
+		icount++;
 	}
 	wrefresh(inputwin);
 	refresh();
