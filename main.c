@@ -22,6 +22,7 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <time.h>
+#include <ncurses.h>
 
 static char *host = NULL;
 static char *password = NULL;
@@ -32,9 +33,55 @@ static bool debug = false;
 static bool jstatus = false;
 static bool nowait = false;
 static bool minecraft = false;
+FILE *debugdev = NULL;
 
 static GByteArray *response = NULL;
 static src_rcon_t *r = NULL;
+
+int yMax,xMax;
+int ms_delay = -1;
+
+/*
+    A_NORMAL        Normal display (no highlight)
+    A_STANDOUT      Best highlighting mode of the terminal.
+    A_UNDERLINE     Underlining
+    A_REVERSE       Reverse video
+    A_BLINK         Blinking
+    A_DIM           Half bright
+    A_BOLD          Extra bright or bold
+    A_PROTECT       Protected mode
+    A_INVIS         Invisible or blank mode
+    A_ALTCHARSET    Alternate character set
+    A_CHARTEXT      Bit-mask to extract a character
+    COLOR_PAIR(n)   Color-pair number n
+
+		COLOR_PAIR(n)
+        COLOR_BLACK   0
+        COLOR_RED     1
+        COLOR_GREEN   2
+        COLOR_YELLOW  3
+        COLOR_BLUE    4
+        COLOR_MAGENTA 5
+        COLOR_CYAN    6
+        COLOR_WHITE   7
+ */
+
+int start_ncurses()
+{
+    initscr();
+    cbreak(); // prevent line buffering, get chars as soon as typed
+    noecho(); // don't print chars to screen when typed
+    curs_set(FALSE); // hide cursor
+    timeout(ms_delay); // wait delay milliseconds for input
+    getmaxyx(stdscr, yMax, xMax); // use ncurses to get screen size
+	if(!has_colors()){
+		printw("Termional does not have colors");
+		getch();
+		return (-1);
+	}
+	start_color();
+	return (0);
+}
 
 static void cleanup(void)
 {
@@ -201,7 +248,7 @@ static int wait_auth(int sock, src_rcon_message_t *auth)
     return 1;
 }
 
-static int send_command(int sock, char const *cmd)
+static int send_command(int sock, char const *cmd, int typeout, char * reply)
 {
     src_rcon_message_t *command = NULL, *end = NULL;
     src_rcon_message_t **commandanswers = NULL;
@@ -269,12 +316,20 @@ static int send_command(int sock, char const *cmd)
                         done = true;
                     } else {
                         size_t bodylen = strlen((char const*)(*p)->body);
+			if (!typeout) {
 
-                        fprintf(stdout, "%s", (char const*)(*p)->body);
+                        	fprintf(stdout, "%s", (char const*)(*p)->body);
 
-                        if (bodylen > 0 && (*p)->body[bodylen-1] != '\n') {
-                            fprintf(stdout, "\n");
-                        }
+	                        if (bodylen > 0 && (*p)->body[bodylen-1] != '\n') {
+        	                    fprintf(stdout, "\n");
+                	        }
+			} else {
+                                sprintf(reply, "%s", (char const*)(*p)->body);
+
+                                if (bodylen > 0 && (*p)->body[bodylen-1] != '\n') {
+                                    sprintf(reply, "\n");
+                                }
+			}
 
                         /* in minecraft mode we are done after the first message
                          */
@@ -321,7 +376,7 @@ static int handle_arguments(int sock, int ac, char **av)
     }
     fclose(cmd);
 
-    if (send_command(sock, c)) {
+    if (send_command(sock, c, 0, NULL)) {
         free(c);
         return -1;
     }
@@ -362,7 +417,7 @@ static int handle_stdin(int sock)
 	    break;
         }
 
-        if (send_command(sock, cmd)) {
+        if (send_command(sock, cmd, 0, NULL)) {
             ec = -1;
             break;
         }
@@ -375,32 +430,76 @@ static int handle_stdin(int sock)
 
 static int handle_status(int sock)
 {
-    char line[] = "status";
+    char linestatus[] = "status";
     int ec = 0;
-    // variables to store the date and time
-//    int hours, minutes, seconds, day, month, year;
     time_t now;
+    int i;
+    char line[100000];
+    char statusline[500];
+    char * pch;
+    int icount;
+
+    if(start_ncurses()) return -1;
+    init_pair(1,COLOR_RED, COLOR_WHITE);
+    attr_t emphasis = A_REVERSE | COLOR_PAIR(1);
+    for (i=0;i<xMax;i++) statusline[i] = ' ';
 
     while (1) {
-        char *cmd = line;
+        char *cmd = linestatus;
 
        /* check for "q" keypress ... todo
          */
-
-	system("clear"); /*clear output screen*/
 
 	/* print time hack */
     	/* Obtain current time */
     	time(&now);
  
     	/* Convert to local time format and print to stdout */
-    	printf("%s", ctime(&now));
+	attron(emphasis);
+	for (i=0;i<xMax;i++) statusline[i] = ' ';
+	sprintf(statusline,"%s", ctime(&now));
+	i = strlen(statusline);
+	statusline[i] = ' ';
+	statusline[i-1] = ' ';
+	statusline[xMax] = '\000';
+	mvprintw(0,0,statusline);
+	attroff(emphasis);
+        WINDOW * inputwin = newwin(yMax-2, xMax-2,1, 1);
+//      box(inputwin,0,0);
+//      wrefresh(inputwin);
+        idcok(inputwin,true);
+        scrollok(inputwin,true);
+        scroll(inputwin);
+        wrefresh(inputwin);
 
-        if (send_command(sock, cmd)) {
+        if (send_command(sock, cmd, 1 , line)) {
             ec = -1;
             break;
         }
-	
+	if (debug) {
+	    rewind(debugdev);
+	    if (fwrite((const void*)line,(size_t)1,(size_t)(strlen(line)+1),debugdev) != (size_t)(strlen(line)+1) ) {
+		fprintf(stderr,"debug write to file failed!\n");
+		exit(1);
+	    }
+	}
+	pch = strtok (line,"\n");
+	wmove(inputwin,1,0);
+	icount = 1;
+	while (pch != NULL)
+	{
+		wprintw(inputwin,"%s\n",pch);
+		pch = strtok (NULL, "\n");
+		if (icount++ > 7) break;
+	}	
+	while (pch != NULL) {
+		strcpy(pch+64,pch+75);
+		wprintw(inputwin,"%s\n",pch);
+		pch = strtok (NULL, "\n");
+	}
+	wrefresh(inputwin);
+	refresh();
+
 	sleep(3);
     }
 
@@ -492,6 +591,15 @@ int main(int ac, char **av)
     if (port == NULL) {
         fprintf(stderr, "No port specified\n");
         return 1;
+    }
+   
+    if (debug) {
+	debugdev = fopen("debug.txt","wb");
+	if(debugdev == NULL)
+	{
+	   fprintf(stderr,"Unable to open debug output file!\n");   
+	   exit(1);             
+	}
     }
 
     memset(&hint, 0, sizeof(hint));
@@ -589,6 +697,8 @@ cleanup:
     if (info) {
         freeaddrinfo(info);
     }
+
+    if (debug) fclose(debugdev);
 
     return ec;
 }
