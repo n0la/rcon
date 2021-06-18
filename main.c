@@ -428,26 +428,59 @@ static int handle_stdin(int sock)
     return ec;
 }
 
+static int num_common(char * str1, char * str2) {
+	int i;
+	int len1,len2;
+	len1 = strlen(str1);
+	len2 = strlen(str2);
+	if (len2 < len1) len1 = len2;
+	for (i=0;i<len1;i++) if ( *(str1+i) != *(str2+i) ) return (i);
+	return(len1);
+}
+
 static int handle_status(int sock)
 {
+#define DIMOLDSTAT	8
+#define MAXUSERS	64
+#define DIMUSERSTAT	6
+#define MAXLINLEN	100000
+#define MAXSTATLINLEN	500
     char linestatus[] = "status";
+    char *oldstatlines[DIMOLDSTAT];
+    int lenoldstatusline = 0;
+    char oldstatusline[MAXSTATLINLEN];
+///    char *olduserdata[MAXUSERS][DIMUSERSTAT];
     int ec = 0;
     time_t now;
-    int i;
-    char line[100000];
-    char statusline[500];
+    int i,j;
+    char line[MAXLINLEN];
+    char statusline[MAXSTATLINLEN];
     char * pch;
     char * pch2;
     int icount;
 
+    char *cmd = linestatus;
     if(start_ncurses()) return -1;
     init_pair(1,COLOR_RED, COLOR_WHITE);
     attr_t emphasis = A_REVERSE | COLOR_PAIR(1);
     for (i=0;i<xMax;i++) statusline[i] = ' ';
-
+    statusline[xMax] = '\000';
+    oldstatusline[0] = '\000';
+    for (i=0;i<DIMOLDSTAT;i++){
+	oldstatlines[i] = (char *) calloc(1,1);
+	if ( oldstatlines[i] == NULL ) {
+		fprintf(stderr,"calloc failed\n");
+		exit(2);
+	}
+    }
+//    for (i=0;i<MAXUSERS;i++) for(j=0;j<DIMUSERSTAT;j++) olduserdata[i][j] = (char *) calloc(1,1);
+    WINDOW * statwin = newwin(1,xMax,0,0);
+    wattron(statwin,emphasis);
+    WINDOW * inputwin = newwin(yMax-2, xMax,1, 1);
+    refresh();
+int loops = 0;
     while (1) {
-        char *cmd = linestatus;
-
+loops++;
        /* check for "q" keypress ... todo
          */
 
@@ -456,22 +489,36 @@ static int handle_status(int sock)
     	time(&now);
  
     	/* Convert to local time format and print to stdout */
-	attron(emphasis);
-	for (i=0;i<xMax;i++) statusline[i] = ' ';
+//	WINDOW * statwin = newwin(1,xMax,0,0);
+//	attron(emphasis);
+	if (!lenoldstatusline) {
+		for (i=0;i<xMax;i++) statusline[i] = ' ';
+		statusline[i+1] = '\000';
+		mvwprintw(statwin,0,0,statusline);
+//		wrefresh(statwin);
+		wnoutrefresh(statwin);
+	}
 	sprintf(statusline,"%s", ctime(&now));
 	i = strlen(statusline);
-	statusline[i] = ' ';
-	statusline[i-1] = ' ';
-	statusline[xMax] = '\000';
-	mvprintw(0,0,statusline);
-	attroff(emphasis);
-        WINDOW * inputwin = newwin(yMax-2, xMax-2,1, 1);
+//	statusline[i] = ' ';
+	statusline[i-1] = '\000';
+//	statusline[xMax] = '\000';
+	j = num_common(statusline, oldstatusline);
+	mvwprintw(statwin,0,j,statusline+j);
+//	if ( i < lenoldstatusline ) wprintw(statwin,"          ");
+//	wrefresh(statwin);
+	wnoutrefresh(statwin);
+	lenoldstatusline = i;
+	strcpy( oldstatusline , statusline);
+//	attroff(emphasis);
+//        WINDOW * inputwin = newwin(yMax-2, xMax-2,1, 1);
 //      box(inputwin,0,0);
 //      wrefresh(inputwin);
-        idcok(inputwin,true);
-        scrollok(inputwin,true);
-        scroll(inputwin);
-        wrefresh(inputwin);
+//        idcok(inputwin,true);
+//        scrollok(inputwin,true);
+//        scroll(inputwin);
+//        wrefresh(inputwin);
+	clearok(inputwin,false);
 
         if (send_command(sock, cmd, 1 , line)) {
             ec = -1;
@@ -485,29 +532,44 @@ static int handle_status(int sock)
 	    }
 	}
 	pch = strtok (line,"\n");
-	wmove(inputwin,1,0);
-	icount = 1;
+//	wmove(inputwin,1,0);
+	icount = 0;
 	while (pch != NULL)
 	{
-		wprintw(inputwin,"%s\n",pch);
+		if (strcmp(pch,oldstatlines[icount]) && loops%2 ) mvwprintw(inputwin,icount,0,"%s\n",pch);
+		if (strlen(pch) != strlen(oldstatlines[icount]) ) {
+			if ( oldstatlines[icount] != NULL) free(oldstatlines[icount]);
+			oldstatlines[icount] = (char *) malloc(strlen(pch)+1);
+		        if ( oldstatlines[icount] == NULL ) {
+         			fprintf(stderr,"malloc failed\n");
+		                exit(2);
+		        }
+		}
+		strcpy(oldstatlines[icount],pch); 
 		pch = strtok (NULL, "\n");
-		if (icount++ > 7) break;
+		if (icount++ > 6) break;
 	}	
 	while (pch != NULL) {
 		strcpy(pch+64,pch+75);
-		if ( icount > 8 ) {
+		if ( icount > 7 ) {
 			pch2=strrchr(pch,':');
 			if ( pch2 != NULL ) *pch2 = '\000';
 		}
-		wprintw(inputwin,"%s\n",pch);
+		mvwprintw(inputwin,icount,0,"%s\n",pch);
 		pch = strtok (NULL, "\n");
 		icount++;
 	}
-	wrefresh(inputwin);
-	refresh();
+//	wrefresh(inputwin);
+	wnoutrefresh(inputwin);
+	doupdate();
+//	refresh();
 
 	sleep(3);
     }
+
+    clear();
+    endwin();
+//   todo : free all of your mallocs
 
     return ec;
 }
