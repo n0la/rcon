@@ -24,6 +24,13 @@
 #include <time.h>
 #include <ncurses.h>
 
+#define DIMOLDSTAT	8
+#define MAXUSERS	64
+#define DIMUSERSTAT	6
+#define MAXLINLEN	10000
+#define MAXSTATLINLEN	500
+#define MAXUSERSP1	MAXUSERS+1
+
 static char *host = NULL;
 static char *password = NULL;
 static char *port = NULL;
@@ -39,7 +46,23 @@ static GByteArray *response = NULL;
 static src_rcon_t *r = NULL;
 
 int yMax,xMax;
-int ms_delay = -1;
+int ms_delay = 0;
+
+typedef struct userdata
+{
+	unsigned int		userid;
+	char *			name;
+	char *			uniqueid;
+	char *			connected;
+	unsigned int		ping;
+	char *			adr;
+} UserDataStructure;
+int numoui = 0;
+
+UserDataStructure * users[MAXUSERSP1];
+UserDataStructure * userp;
+UserDataStructure user;
+
 
 /*
     A_NORMAL        Normal display (no highlight)
@@ -81,6 +104,80 @@ int start_ncurses()
 	}
 	start_color();
 	return (0);
+}
+
+void freeuserdata(UserDataStructure ** userdata) {
+   UserDataStructure * userq;
+   userq = *userdata;
+   if ( userq == NULL ) return;
+   if ( userq->name      != NULL ) free(userq->name);
+   if ( userq->uniqueid  != NULL ) free(userq->uniqueid);
+   if ( userq->connected != NULL ) free(userq->connected);
+   if ( userq->adr       != NULL ) free(userq->adr);
+   free(userq);
+   *userdata = NULL;
+   return;
+}
+
+int lastnonblank(char * str, int maxlen) {
+   int i;
+   if ( maxlen <= 0 ) return (0);
+   if ( str == NULL ) return (0);
+   for (i=maxlen-1;i<0;i--) if ( *(str+i) != ' ' ) break;
+   return(i);
+}
+
+int parseuser (char * userstring, UserDataStructure ** userdata) {
+   UserDataStructure * userq;
+   char *idstr;
+   char *namestr;
+   char *uniqueidstr;
+   char *connectedstr;
+   char *pingstr;
+   char *adrstr;
+   int i;
+
+   if ( userstring == NULL ) return (1);
+   if ( userdata == NULL ) return(2);
+   freeuserdata(userdata);
+   *userdata = (UserDataStructure *) malloc(sizeof(UserDataStructure));
+   userq = *userdata;
+   
+//# userid name                uniqueid            connected ping  adr
+//01234567890123456789012345678901234567890123456789012345678901234567890
+//          1         1         1         1         1         1         1     
+
+   idstr = userstring + 2;
+   namestr = userstring + 9;
+   uniqueidstr = userstring + 29;
+   connectedstr = userstring + 49;
+   pingstr = userstring + 59;
+   adrstr = userstring + 65;
+   sscanf(idstr,"%u",&(userq->userid));
+   sscanf(pingstr,"%u",&(userq->ping));
+   
+   i = lastnonblank(namestr,20);
+   userq->name = (char *) malloc((size_t) (i+1) );
+   strncpy(userq->name,namestr,i);
+   *(userq->name+i) = '\000';
+   
+   i = lastnonblank(uniqueidstr,20);
+   userq->uniqueid = (char *) malloc((size_t) (i+1) );
+   strncpy(userq->uniqueid,uniqueidstr,i);
+   *(userq->uniqueid+i) = '\000';
+   
+   i = lastnonblank(connectedstr,20);
+   userq->connected = (char *) malloc((size_t) (i+1) );
+   strncpy(userq->connected,connectedstr,i);
+   *(userq->connected+i) = '\000';
+   
+   i = lastnonblank(adrstr,20);
+   userq->adr = (char *) malloc((size_t) (i+1) );
+   strncpy(userq->adr,adrstr,i);
+   *(userq->adr+i) = '\000';
+   
+   return(0);
+   
 }
 
 static void cleanup(void)
@@ -440,24 +537,34 @@ static int num_common(char * str1, char * str2) {
 
 static int handle_status(int sock)
 {
-#define DIMOLDSTAT	8
-#define MAXUSERS	64
-#define DIMUSERSTAT	6
-#define MAXLINLEN	100000
-#define MAXSTATLINLEN	500
+    enum STAT2STATE {
+	INITIAL,
+	WAITING,
+	SELUSER,
+        KICKBAN,
+	CHANGELEVEL
+    } stat2state = WAITING;
+    enum STAT2STATE oldstat2state = INITIAL;
     char linestatus[] = "status";
     char *oldstatlines[DIMOLDSTAT];
+    char *oldmaps[DIMOLDSTAT];
     int lenoldstatusline = 0;
     char oldstatusline[MAXSTATLINLEN];
-///    char *olduserdata[MAXUSERS][DIMUSERSTAT];
+    char *oldusers[MAXUSERSP1];
     int ec = 0;
     time_t now;
     int i,j;
     char line[MAXLINLEN];
+    char templine[MAXLINLEN];
     char statusline[MAXSTATLINLEN];
     char * pch;
     char * pch2;
     int icount;
+    int nummaps = 0;
+    int maxmapnamelen = 0;
+    int iuser;
+    int c;
+    int highlight = 0;
 
     char *cmd = linestatus;
     if(start_ncurses()) return -1;
@@ -472,41 +579,66 @@ static int handle_status(int sock)
 		fprintf(stderr,"calloc failed\n");
 		exit(2);
 	}
+	oldmaps[i] = (char *) calloc(1,1);
+	if ( oldmaps[i] == NULL ) {
+		fprintf(stderr,"calloc failed\n");
+		exit(3);
+	}
     }
+    for (i=0;i<MAXUSERS;i++) oldusers[i] = (char *) calloc(1,1);
 //    for (i=0;i<MAXUSERS;i++) for(j=0;j<DIMUSERSTAT;j++) olduserdata[i][j] = (char *) calloc(1,1);
     WINDOW * statwin = newwin(1,xMax,0,0);
     wattron(statwin,emphasis);
-    WINDOW * inputwin = newwin(yMax-2, xMax,1, 1);
+    WINDOW * statwin2 = newwin(1,xMax,yMax-1,0);
+    wattron(statwin2,emphasis);
+    WINDOW * inputwin = newwin(yMax-3, xMax,1, 1);
+    keypad(inputwin,true);
+    wtimeout(inputwin,0);
     refresh();
-int loops = 0;
+    int oldcount = 0;
     while (1) {
-loops++;
-       /* check for "q" keypress ... todo
-         */
-
-	/* print time hack */
-    	/* Obtain current time */
-    	time(&now);
- 
-    	/* Convert to local time format and print to stdout */
-//	WINDOW * statwin = newwin(1,xMax,0,0);
-//	attron(emphasis);
+	/* initialize status lines */
 	if (!lenoldstatusline) {
 		for (i=0;i<xMax;i++) statusline[i] = ' ';
 		statusline[i+1] = '\000';
 		mvwprintw(statwin,0,0,statusline);
-//		wrefresh(statwin);
 		wnoutrefresh(statwin);
 	}
-	sprintf(statusline,"%s", ctime(&now));
+	if (stat2state != oldstat2state) {
+//		for (i=0;i<xMax;i++) statusline[i] = ' ';
+//		statusline[i+1] = '\000';
+//		mvwprintw(statwin2,0,0,statusline);
+		mvwprintw(statwin2,0,0,"%*s",xMax," ");
+		wnoutrefresh(statwin2);
+		switch(stat2state)
+		{
+		case WAITING:
+			mvwprintw(statwin2,0,0,"%s"," F1 -> Select User, F2 -> Change Level, q -> End Program");
+			break;
+		case SELUSER:
+			mvwprintw(statwin2,0,0,"%s"," ^v Arrows -> Highlight User, Space -> Select User, <ESC> -> Return");
+			break;
+		case KICKBAN:
+			mvwprintw(statwin2,0,0,"%s"," F3 -> Kick User, F4 -> Permantly Ban User, <ESC> -> Return");
+			break;
+		case CHANGELEVEL:
+			mvwprintw(statwin2,0,0,"%s"," ^v Arrows -> Highlight Level, Space -> Select Level, <ESC> -> Return");
+			break;
+		default:
+			break;
+		}
+		wnoutrefresh(statwin2);
+		oldstat2state = stat2state;
+	}
+	/* print time hack */
+    	/* Obtain current time */
+    	time(&now);
+    	/* Convert to local time format and print to status line */
+	sprintf(statusline," %s", ctime(&now));
 	i = strlen(statusline);
-//	statusline[i] = ' ';
 	statusline[i-1] = '\000';
-//	statusline[xMax] = '\000';
 	j = num_common(statusline, oldstatusline);
 	mvwprintw(statwin,0,j,statusline+j);
-//	if ( i < lenoldstatusline ) wprintw(statwin,"          ");
-//	wrefresh(statwin);
 	wnoutrefresh(statwin);
 	lenoldstatusline = i;
 	strcpy( oldstatusline , statusline);
@@ -525,7 +657,7 @@ loops++;
             break;
         }
 	if (debug) {
-	    rewind(debugdev);
+//	    rewind(debugdev);
 	    if (fwrite((const void*)line,(size_t)1,(size_t)(strlen(line)+1),debugdev) != (size_t)(strlen(line)+1) ) {
 		fprintf(stderr,"debug write to file failed!\n");
 		exit(1);
@@ -534,9 +666,10 @@ loops++;
 	pch = strtok (line,"\n");
 //	wmove(inputwin,1,0);
 	icount = 0;
+	iuser = 0;
 	while (pch != NULL)
 	{
-		if (strcmp(pch,oldstatlines[icount]) && loops%2 ) mvwprintw(inputwin,icount,0,"%s\n",pch);
+		if (strcmp(pch,oldstatlines[icount])) mvwprintw(inputwin,icount,0,"%s",pch);
 		if (strlen(pch) != strlen(oldstatlines[icount]) ) {
 			if ( oldstatlines[icount] != NULL) free(oldstatlines[icount]);
 			oldstatlines[icount] = (char *) malloc(strlen(pch)+1);
@@ -550,21 +683,161 @@ loops++;
 		if (icount++ > 6) break;
 	}	
 	while (pch != NULL) {
-		strcpy(pch+64,pch+75);
+		strcpy(templine,pch);
+		strcpy(templine+64,templine+75);
 		if ( icount > 7 ) {
-			pch2=strrchr(pch,':');
+			pch2=strrchr(templine,':');
 			if ( pch2 != NULL ) *pch2 = '\000';
 		}
-		mvwprintw(inputwin,icount,0,"%s\n",pch);
+		if( strlen(templine) > xMax ) *(templine+xMax) = '\000';
+		if ( strcmp(templine,oldusers[iuser]) ) {
+			mvwprintw(inputwin,icount,0,"%*s",xMax-1," ");
+			mvwprintw(inputwin,icount,0,"%s",templine);	
+		}
+//		mvwprintw(inputwin,icount,0,"%s\n",pch);
+                if (strlen(templine) != strlen(oldusers[iuser]) ) {
+                        if ( oldusers[iuser] != NULL) free(oldusers[iuser]);
+                        oldusers[iuser] = (char *) malloc(strlen(templine)+1);
+                        if ( oldusers[iuser] == NULL ) {
+                                fprintf(stderr,"malloc failed\n");
+                                exit(2);
+                        }
+                }
+                strcpy(oldusers[iuser],templine);
+		parseuser (oldusers[iuser], &(users[iuser]));
+		iuser++;
 		pch = strtok (NULL, "\n");
 		icount++;
 	}
+	if ( oldcount > icount ) for(i=icount;i<oldcount;i++) mvwprintw(inputwin,i,0,"%*s",xMax-1," ");
+	oldcount = icount;
 //	wrefresh(inputwin);
 	wnoutrefresh(inputwin);
 	doupdate();
 //	refresh();
+	c = wgetch(inputwin);
+	if ( c == 'q' && stat2state == WAITING ) break;
+	if ( c == KEY_F(1) && stat2state == WAITING && iuser ) stat2state = SELUSER;
+	if ( c == KEY_F(2) && stat2state == WAITING ) stat2state = CHANGELEVEL;
+	if ( c == KEY_F(3) && stat2state == KICKBAN && highlight ) {
+		sprintf(templine,"kickid %u",(*(users+highlight))->userid);
+		if (send_command(sock, templine, 1 , line)) {
+	            ec = -1;
+        	    break;
+	        }
 
-	sleep(3);
+		stat2state = WAITING;
+	}
+	if ( stat2state == CHANGELEVEL ) {
+                sprintf(templine,"maps *");
+                if (send_command(sock, templine, 1 , line)) {
+                    ec = -1;
+                    break;
+                }
+	        if (debug) {
+        	    rewind(debugdev);
+	            if (fwrite((const void*)line,(size_t)1,(size_t)(strlen(line)+1),debugdev) != (size_t)(strlen(line)+1) ) {
+        	        fprintf(stderr,"debug write to file failed!\n");
+	                exit(1);
+        	    }
+	        }
+	        pch = strtok (line,"\n");
+	        nummaps = 0;
+		maxmapnamelen = 0;
+		i = 0;
+	        while (pch != NULL)
+	        {
+			i++;
+			if (i != 1) {
+		                if (strlen(pch+16) != strlen(oldmaps[nummaps]) ) {
+        		                if ( oldmaps[nummaps] != NULL) free(oldmaps[nummaps]);
+                		        oldmaps[nummaps] = (char *) malloc(strlen(pch+16)+1);
+	                	        if ( oldmaps[nummaps] == NULL ) {
+        	                	        fprintf(stderr,"malloc failed\n");
+	                	                exit(2);
+		                        }
+        		        }
+		                strcpy(oldmaps[nummaps],pch+16);
+				if (strlen(oldmaps[nummaps]) > maxmapnamelen) maxmapnamelen = strlen(oldmaps[nummaps]);
+	        	        nummaps++;
+			}
+        	        pch = strtok (NULL, "\n");
+	        }
+		WINDOW * changelevwin = newwin(nummaps+1,maxmapnamelen+2,6,10);
+		keypad(changelevwin,true);
+		wtimeout(changelevwin,0);
+	        wnoutrefresh(changelevwin);
+	        doupdate();
+		box(changelevwin,0,0);
+                highlight = 1;
+                keypad(changelevwin,true);
+                while(1)
+                {
+                        for(i=1;i<nummaps;i++)
+                        {
+                                if(i==highlight) wattron(changelevwin, A_REVERSE);
+                                mvwprintw(changelevwin,i,1,oldmaps[i]);
+                                wattroff(changelevwin, A_REVERSE);
+                                wrefresh(changelevwin);
+                        }
+                        c = wgetch(changelevwin);
+                        switch(c)
+                        {
+                        case KEY_UP:
+                                highlight--;
+                                if(highlight == -1) highlight = 0;
+                                break;
+                        case KEY_DOWN:
+                                highlight++;
+                                if(highlight == nummaps) highlight = nummaps - 1;
+                                break;
+                        default:
+                                break;
+                        }
+                        if(c == 10) break;
+                }
+                sprintf(templine,"changelevel %s",oldmaps[highlight]);
+                if (send_command(sock, templine, 1 , line)) {
+                    ec = -1;
+                    break;
+                }
+		stat2state = WAITING;
+		wnoutrefresh(changelevwin);
+		doupdate();
+		highlight = 0;
+		touchwin(inputwin);
+	}
+	if ( stat2state == SELUSER ) {
+		highlight = 1;
+		keypad(inputwin,true);
+		while(1)
+		{
+			for(i=1;i<=iuser;i++)
+			{
+				if(i==highlight) wattron(inputwin, A_REVERSE);
+				mvwprintw(inputwin,i+8,0,oldusers[i]);
+				wattroff(inputwin, A_REVERSE);
+				wrefresh(inputwin);
+			}
+			c = wgetch(inputwin);
+			switch(c)
+			{
+			case KEY_UP:
+				highlight--;
+				if(highlight == -1) highlight = 0;
+				break;
+			case KEY_DOWN:
+				highlight++;
+				if(highlight == iuser) highlight = iuser - 1;
+				break;
+			default:
+				break;
+			}
+			if(c == 10) break;
+		}
+		stat2state = KICKBAN;
+	}
+	if ( stat2state == WAITING ) sleep(3);
     }
 
     clear();
@@ -624,6 +897,9 @@ int main(int ac, char **av)
     int sock = 0;
     int ret = 0;
     int ec = 3;
+    int i;
+
+    for (i=0;i<MAXUSERSP1;i++) users[MAXUSERSP1] = NULL;
 
 #ifdef HAVE_PLEDGE
     /* stdio = standard IO and send/recv
