@@ -96,6 +96,7 @@ int start_ncurses()
     noecho(); // don't print chars to screen when typed
     curs_set(FALSE); // hide cursor
     timeout(ms_delay); // wait delay milliseconds for input
+//    set_escdelay(0); // delay to wait for second character of esc sequence
     getmaxyx(stdscr, yMax, xMax); // use ncurses to get screen size
 	if(!has_colors()){
 		printw("Termional does not have colors");
@@ -765,12 +766,12 @@ static int handle_status(int sock)
 	        }
 		WINDOW * changelevwin = newwin(nummaps+1,maxmapnamelen+2,6,10);
 		keypad(changelevwin,true);
-		wtimeout(changelevwin,0);
+//		set_escdelay(25);
+		wtimeout(changelevwin,-1);
 	        wnoutrefresh(changelevwin);
 	        doupdate();
 		box(changelevwin,0,0);
                 highlight = 1;
-                keypad(changelevwin,true);
                 while(1)
                 {
                         for(i=1;i<nummaps;i++)
@@ -778,7 +779,8 @@ static int handle_status(int sock)
                                 if(i==highlight) wattron(changelevwin, A_REVERSE);
                                 mvwprintw(changelevwin,i,1,oldmaps[i]);
                                 wattroff(changelevwin, A_REVERSE);
-                                wrefresh(changelevwin);
+				wnoutrefresh(changelevwin);
+				doupdate();
                         }
                         c = wgetch(changelevwin);
                         switch(c)
@@ -917,9 +919,9 @@ int main(int ac, char **av)
     if (do_config()) {
         return 2;
     }
-    /* Now parse arguments *again*. This allows for overrides on the command
-     * line.
-     */
+    // Now parse arguments *again*. This allows for overrides on the command
+    // line.
+    //
     optind = 1;
     parse_args(ac, av);
 
@@ -984,8 +986,8 @@ int main(int ac, char **av)
     }
 
 #ifdef HAVE_PLEDGE
-    /* Drop privileges further, since we are done socket()ing.
-     */
+    // Drop privileges further, since we are done socket()ing.
+    //
     if (pledge("stdio", NULL) == -1) {
         err(1, "pledge");
     }
@@ -994,11 +996,11 @@ int main(int ac, char **av)
     response = g_byte_array_new();
     r = src_rcon_new();
 
-    /* Do we have a password?
-     */
+    // Do we have a password?
+    //
     if (password != NULL && strlen(password) > 0) {
-        /* Send auth request first
-         */
+        // Send auth request first
+        //
         auth = src_rcon_auth(r, password);
 
         if (send_message(sock, auth)) {
@@ -1017,7 +1019,7 @@ int main(int ac, char **av)
         if (handle_arguments(sock, ac, av)) {
             goto cleanup;
         }
-    } else if (jstatus) {
+    } else if (jstatus) { 
         if (handle_status(sock)) {
             goto cleanup;
         }
