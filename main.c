@@ -563,7 +563,7 @@ static int handle_status(int sock)
     int icount;
     int nummaps = 0;
     int maxmapnamelen = 0;
-    int iuser;
+    int iuser = 0;
     int c;
     int highlight = 0;
 
@@ -617,13 +617,13 @@ static int handle_status(int sock)
 			mvwprintw(statwin2,0,0,"%s"," F1 -> Select User, F2 -> Change Level, q -> End Program");
 			break;
 		case SELUSER:
-			mvwprintw(statwin2,0,0,"%s"," ^v Arrows -> Highlight User, Space -> Select User, <ESC> -> Return");
+			mvwprintw(statwin2,0,0,"%s"," ^v Arrows -> Highlight User, Space -> Select User, q -> Return (no selection)");
 			break;
 		case KICKBAN:
-			mvwprintw(statwin2,0,0,"%s"," F3 -> Kick User, F4 -> Permantly Ban User, <ESC> -> Return");
+			mvwprintw(statwin2,0,0,"%s"," F3 -> Kick User, F4 -> Permantly Ban User, q -> Return (to select User)");
 			break;
 		case CHANGELEVEL:
-			mvwprintw(statwin2,0,0,"%s"," ^v Arrows -> Highlight Level, Space -> Select Level, <ESC> -> Return");
+			mvwprintw(statwin2,0,0,"%s"," ^v Arrows -> Highlight Level, Space -> Select Level, q -> Return (no selection)");
 			break;
 		default:
 			break;
@@ -718,6 +718,9 @@ static int handle_status(int sock)
 //	refresh();
 	c = wgetch(inputwin);
 	if ( c == 'q' && stat2state == WAITING ) break;
+	if ( c == 'q' && stat2state == CHANGELEVEL ) { stat2state = WAITING; continue;}
+	if ( c == 'q' && stat2state == SELUSER ) { stat2state = WAITING; continue;}
+	if ( c == 'q' && stat2state == KICKBAN ) { stat2state = SELUSER; continue;}
 	if ( c == KEY_F(1) && stat2state == WAITING && iuser ) stat2state = SELUSER;
 	if ( c == KEY_F(2) && stat2state == WAITING ) stat2state = CHANGELEVEL;
 	if ( c == KEY_F(3) && stat2state == KICKBAN && highlight ) {
@@ -726,10 +729,26 @@ static int handle_status(int sock)
 	            ec = -1;
         	    break;
 	        }
-
+		stat2state = WAITING;
+	}
+	if ( c == KEY_F(4) && stat2state == KICKBAN && highlight ) {
+		sprintf(templine,"banid 0 %s kick",(*(users+highlight))->uniqueid);
+		if (send_command(sock, templine, 1 , line)) {
+	            ec = -1;
+        	    break;
+	        }
+                sprintf(templine,"writeid");
+                if (send_command(sock, templine, 1 , line)) {
+                    ec = -1;
+                    break;
+                }
 		stat2state = WAITING;
 	}
 	if ( stat2state == CHANGELEVEL ) {
+		mvwprintw(statwin2,0,0,"%s"," ^v Arrows -> Highlight Level, Space -> Select Level, q -> Return (no selection)");
+	        oldstat2state = stat2state;
+		wnoutrefresh(statwin2);
+	        doupdate();
                 sprintf(templine,"maps *");
                 if (send_command(sock, templine, 1 , line)) {
                     ec = -1;
@@ -793,11 +812,21 @@ static int handle_status(int sock)
                                 highlight++;
                                 if(highlight == nummaps) highlight = nummaps - 1;
                                 break;
+                        case 'q':
+				stat2state = WAITING;
+				mvwprintw(statwin2,0,0,"%*s",xMax," ");
+				wnoutrefresh(statwin2);
+        		        highlight = 0;
+				touchwin(inputwin);
+				doupdate();
+                                break;
                         default:
                                 break;
                         }
-                        if(c == 10) break;
+			if ( stat2state == WAITING ) break;
+                        if(c == ' ') break;
                 }
+		if ( stat2state == WAITING ) continue;
                 sprintf(templine,"changelevel %s",oldmaps[highlight]);
                 if (send_command(sock, templine, 1 , line)) {
                     ec = -1;
@@ -810,6 +839,11 @@ static int handle_status(int sock)
 		touchwin(inputwin);
 	}
 	if ( stat2state == SELUSER ) {
+		if ( iuser < 2 ) { stat2state = WAITING; continue; }
+                mvwprintw(statwin2,0,0,"%s"," ^v Arrows -> Highlight User, Space -> Select User, q -> Return (no selection)");
+		oldstat2state = stat2state;
+                wnoutrefresh(statwin2);
+                doupdate();
 		highlight = 1;
 		keypad(inputwin,true);
 		while(1)
@@ -832,11 +866,21 @@ static int handle_status(int sock)
 				highlight++;
 				if(highlight == iuser) highlight = iuser - 1;
 				break;
+                        case 'q':
+                                stat2state = WAITING;
+                                mvwprintw(statwin2,0,0,"%*s",xMax," ");
+                                wnoutrefresh(statwin2);
+                                highlight = 0;
+                                touchwin(inputwin);
+                                doupdate();
+                                break;
 			default:
 				break;
 			}
-			if(c == 10) break;
+                        if ( stat2state == WAITING ) break;
+                        if(c == ' ') break;
 		}
+		if ( stat2state == WAITING ) continue;
 		stat2state = KICKBAN;
 	}
 	if ( stat2state == WAITING ) sleep(3);
