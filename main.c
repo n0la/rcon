@@ -592,7 +592,7 @@ static int handle_status(int sock)
     wattron(statwin,emphasis);
     WINDOW * statwin2 = newwin(1,xMax,yMax-1,0);
     wattron(statwin2,emphasis);
-    WINDOW * inputwin = newwin(yMax-3, xMax,1, 1);
+    WINDOW * inputwin = newwin(yMax-2, xMax,1, 1);
     keypad(inputwin,true);
     wtimeout(inputwin,0);
     refresh();
