@@ -783,20 +783,20 @@ static int handle_status(int sock)
 			}
         	        pch = strtok (NULL, "\n");
 	        }
-		WINDOW * changelevwin = newwin(nummaps+1,maxmapnamelen+2,6,10);
+		WINDOW * changelevwin = newwin(nummaps+2,maxmapnamelen+2,6,10);
 		keypad(changelevwin,true);
 //		set_escdelay(25);
 		wtimeout(changelevwin,-1);
 	        wnoutrefresh(changelevwin);
 	        doupdate();
 		box(changelevwin,0,0);
-                highlight = 1;
+                highlight = 0;
                 while(1)
                 {
-                        for(i=1;i<nummaps;i++)
+                        for(i=0;i<nummaps;i++)
                         {
                                 if(i==highlight) wattron(changelevwin, A_REVERSE);
-                                mvwprintw(changelevwin,i,1,oldmaps[i]);
+                                mvwprintw(changelevwin,i+1,1,oldmaps[i]);
                                 wattroff(changelevwin, A_REVERSE);
 				wnoutrefresh(changelevwin);
 				doupdate();
