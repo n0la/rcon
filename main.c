@@ -665,7 +665,6 @@ static int handle_status(int sock)
 	    }
 	}
 	pch = strtok (line,"\n");
-//	wmove(inputwin,1,0);
 	icount = 0;
 	iuser = 0;
 	while (pch != NULL)
@@ -681,12 +680,12 @@ static int handle_status(int sock)
 		}
 		strcpy(oldstatlines[icount],pch); 
 		pch = strtok (NULL, "\n");
-		if (icount++ > 6) break;
+		if (++icount > 7 ) break;
 	}	
 	while (pch != NULL) {
 		strcpy(templine,pch);
-		strcpy(templine+64,templine+75);
-		if ( icount > 7 ) {
+		strcpy(templine+64,templine+76);
+		if ( icount > 8 ) {
 			pch2=strrchr(templine,':');
 			if ( pch2 != NULL ) *pch2 = '\000';
 		}
