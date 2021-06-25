@@ -63,6 +63,17 @@ UserDataStructure * users[MAXUSERSP1];
 UserDataStructure * userp;
 UserDataStructure user;
 
+enum STAT2STATE {
+    INITIAL,
+    WAITING,
+    SELUSER,
+    KICKBAN,
+    CHANGELEVEL
+} stat2state = WAITING;
+
+WINDOW * statwin;
+WINDOW * statwin2;
+WINDOW * inputwin;
 
 /*
     A_NORMAL        Normal display (no highlight)
@@ -146,7 +157,7 @@ int parseuser (char * userstring, UserDataStructure ** userdata) {
    
 //# userid name                uniqueid            connected ping  adr
 //01234567890123456789012345678901234567890123456789012345678901234567890
-//          1         1         1         1         1         1         1     
+//          1         2         3         4         5         6         7     
 
    idstr = userstring + 2;
    namestr = userstring + 9;
@@ -179,6 +190,102 @@ int parseuser (char * userstring, UserDataStructure ** userdata) {
    
    return(0);
    
+}
+
+int displaylist (int numitems, char ** itemlist, int ystart, int xstart, int ymax, int xmax, char* statstr) {
+	int i;
+	int c = 0;
+	int maxnamelen = 0;
+	int numrows;
+	int numcols;
+	int maxnumcols;
+	int highlight;
+	char tempstrstat[1000];
+	if (!numitems) return(-1);
+	if ( ystart < 0 ) return(-2);
+	if ( xstart < 0 ) return(-3);
+	if ( ymax < 0 ) return(-4);
+	if ( ymax < 0 ) return(-5);
+	if ( ystart > ymax-3 ) return(-6);
+	if ( xstart > xmax-2 ) return(-7);
+	if ( itemlist == NULL ) return(-8);
+	if ( *itemlist == NULL ) return(-9);
+	if ( numitems < 0 ) return(-10);
+	if ( numitems == 1 ) return(0);
+	for (i=0;i<numitems;i++) {
+		if ( itemlist[i] == NULL ) return(-11);
+		if ( strlen( itemlist[i] ) > maxnamelen ) maxnamelen = strlen( itemlist[i] );
+	}
+	if ((xmax-xstart-2)/(maxnamelen+1) <= 0 ) return(-12);
+	if ( numitems > ( (xmax-xstart-2)/(maxnamelen+1) * ( ymax-ystart-2 ) ) ) return(-14);
+	// looks good, let's go!
+	mvwinstr(statwin2, 0, 0, tempstrstat);
+        mvwprintw(statwin2,0,0,"%*s",xMax," ");
+        mvwprintw(statwin2,0,0,"%s",statstr);
+	wnoutrefresh(statwin2);
+        doupdate();
+	numrows = numitems;
+	numcols = 1;
+	if ( numrows > (ymax-ystart-2) ) {
+		numrows = ymax-ystart-2;
+		maxnumcols = (xmax-xstart-2)/(maxnamelen+1);
+		if (maxnumcols < 1 ) return(-16);
+		numcols = ( numitems / numrows ) + 1;
+		if ( !(numitems%numrows) ) numcols--;
+	}
+        WINDOW * changelevwin = newwin(numrows+2,(maxnamelen+1)*numcols,ystart,xstart);
+        keypad(changelevwin,true);
+//      set_escdelay(25);
+        box(changelevwin,0,0);
+        wtimeout(changelevwin,-1);
+        wnoutrefresh(changelevwin);
+        doupdate();
+        highlight = 0;
+        while(1)
+        {
+                for(i=0;i<numitems;i++)
+                {
+                        if(i==highlight) wattron(changelevwin, A_REVERSE);
+                        mvwprintw(changelevwin,(i%numrows)+1,( (i/numrows) * (maxnamelen+1) ) + 1,itemlist[i] );
+                        wattroff(changelevwin, A_REVERSE);
+                        wnoutrefresh(changelevwin);
+                        doupdate();
+                }
+                c = wgetch(changelevwin);
+                switch(c)
+                {
+                case KEY_UP:
+                        highlight--;
+                        if(highlight == -1) highlight = 0;
+                        break;
+                case KEY_DOWN:
+                        highlight++;
+                        if(highlight == numitems) highlight = numitems - 1;
+                        break;
+                case 'q':
+                        stat2state = WAITING;
+                        mvwprintw(statwin2, 0, 0,"%*s",xMax," ");
+			mvwprintw(statwin2, 0, 0, tempstrstat);
+                        wnoutrefresh(statwin2);
+                        highlight = 0;
+                        touchwin(inputwin);
+                        doupdate();
+                        break;
+                default:
+                        break;
+                }
+                if ( stat2state == WAITING ) break;
+                if(c == ' ') break;
+        }
+        if ( stat2state == WAITING ) return(-15);
+        stat2state = WAITING;
+//        wnoutrefresh(changelevwin);
+        mvwprintw(statwin2, 0, 0,"%*s",xMax," ");
+        mvwprintw(statwin2, 0, 0, tempstrstat);
+        wnoutrefresh(statwin2);
+        doupdate();
+        touchwin(inputwin);
+        return(highlight);
 }
 
 static void cleanup(void)
@@ -538,13 +645,6 @@ static int num_common(char * str1, char * str2) {
 
 static int handle_status(int sock)
 {
-    enum STAT2STATE {
-	INITIAL,
-	WAITING,
-	SELUSER,
-        KICKBAN,
-	CHANGELEVEL
-    } stat2state = WAITING;
     enum STAT2STATE oldstat2state = INITIAL;
     char linestatus[] = "status";
     char *oldstatlines[DIMOLDSTAT];
@@ -566,7 +666,10 @@ static int handle_status(int sock)
     int iuser = 0;
     int c;
     int highlight = 0;
-
+    char * statmainstr     = " F1 -> Select User, F2 -> Change Level, q -> End Program";
+    char * statseluserstr  = " ^v Arrows -> Highlight User, Space -> Select User, q -> Return (no selection)";
+    char * statkickuserstr = " F3 -> Kick User, F4 -> Permantly Ban User, q -> Return (to select User)";
+    char * statsellevelstr = " ^v Arrows -> Highlight Level, Space -> Select Level, q -> Return (no selection)";
     char *cmd = linestatus;
     if(start_ncurses()) return -1;
     init_pair(1,COLOR_RED, COLOR_WHITE);
@@ -588,11 +691,11 @@ static int handle_status(int sock)
     }
     for (i=0;i<MAXUSERS;i++) oldusers[i] = (char *) calloc(1,1);
 //    for (i=0;i<MAXUSERS;i++) for(j=0;j<DIMUSERSTAT;j++) olduserdata[i][j] = (char *) calloc(1,1);
-    WINDOW * statwin = newwin(1,xMax,0,0);
+    statwin = newwin(1,xMax,0,0);
     wattron(statwin,emphasis);
-    WINDOW * statwin2 = newwin(1,xMax,yMax-1,0);
+    statwin2 = newwin(1,xMax,yMax-1,0);
     wattron(statwin2,emphasis);
-    WINDOW * inputwin = newwin(yMax-2, xMax,1, 1);
+    inputwin = newwin(yMax-2, xMax,1, 1);
     keypad(inputwin,true);
     wtimeout(inputwin,0);
     refresh();
@@ -606,24 +709,21 @@ static int handle_status(int sock)
 		wnoutrefresh(statwin);
 	}
 	if (stat2state != oldstat2state) {
-//		for (i=0;i<xMax;i++) statusline[i] = ' ';
-//		statusline[i+1] = '\000';
-//		mvwprintw(statwin2,0,0,statusline);
 		mvwprintw(statwin2,0,0,"%*s",xMax," ");
 		wnoutrefresh(statwin2);
 		switch(stat2state)
 		{
 		case WAITING:
-			mvwprintw(statwin2,0,0,"%s"," F1 -> Select User, F2 -> Change Level, q -> End Program");
+			mvwprintw(statwin2,0,0,"%s",statmainstr);
 			break;
 		case SELUSER:
-			mvwprintw(statwin2,0,0,"%s"," ^v Arrows -> Highlight User, Space -> Select User, q -> Return (no selection)");
+			mvwprintw(statwin2,0,0,"%s",statseluserstr);
 			break;
 		case KICKBAN:
-			mvwprintw(statwin2,0,0,"%s"," F3 -> Kick User, F4 -> Permantly Ban User, q -> Return (to select User)");
+			mvwprintw(statwin2,0,0,"%s",statkickuserstr);
 			break;
 		case CHANGELEVEL:
-			mvwprintw(statwin2,0,0,"%s"," ^v Arrows -> Highlight Level, Space -> Select Level, q -> Return (no selection)");
+			mvwprintw(statwin2,0,0,"%s",statsellevelstr);
 			break;
 		default:
 			break;
@@ -643,14 +743,6 @@ static int handle_status(int sock)
 	wnoutrefresh(statwin);
 	lenoldstatusline = i;
 	strcpy( oldstatusline , statusline);
-//	attroff(emphasis);
-//        WINDOW * inputwin = newwin(yMax-2, xMax-2,1, 1);
-//      box(inputwin,0,0);
-//      wrefresh(inputwin);
-//        idcok(inputwin,true);
-//        scrollok(inputwin,true);
-//        scroll(inputwin);
-//        wrefresh(inputwin);
 	clearok(inputwin,false);
 
         if (send_command(sock, cmd, 1 , line)) {
@@ -658,7 +750,7 @@ static int handle_status(int sock)
             break;
         }
 	if (debug) {
-//	    rewind(debugdev);
+//	    rewind(debugdev);		// use when debugging this stuff only
 	    if (fwrite((const void*)line,(size_t)1,(size_t)(strlen(line)+1),debugdev) != (size_t)(strlen(line)+1) ) {
 		fprintf(stderr,"debug write to file failed!\n");
 		exit(1);
@@ -744,10 +836,7 @@ static int handle_status(int sock)
 		stat2state = WAITING;
 	}
 	if ( stat2state == CHANGELEVEL ) {
-		mvwprintw(statwin2,0,0,"%s"," ^v Arrows -> Highlight Level, Space -> Select Level, q -> Return (no selection)");
 	        oldstat2state = stat2state;
-		wnoutrefresh(statwin2);
-	        doupdate();
                 sprintf(templine,"maps *");
                 if (send_command(sock, templine, 1 , line)) {
                     ec = -1;
@@ -782,60 +871,19 @@ static int handle_status(int sock)
 			}
         	        pch = strtok (NULL, "\n");
 	        }
-		WINDOW * changelevwin = newwin(nummaps+2,maxmapnamelen+2,6,10);
-		keypad(changelevwin,true);
-//		set_escdelay(25);
-		wtimeout(changelevwin,-1);
-	        wnoutrefresh(changelevwin);
-	        doupdate();
-		box(changelevwin,0,0);
-                highlight = 0;
-                while(1)
-                {
-                        for(i=0;i<nummaps;i++)
-                        {
-                                if(i==highlight) wattron(changelevwin, A_REVERSE);
-                                mvwprintw(changelevwin,i+1,1,oldmaps[i]);
-                                wattroff(changelevwin, A_REVERSE);
-				wnoutrefresh(changelevwin);
-				doupdate();
-                        }
-                        c = wgetch(changelevwin);
-                        switch(c)
-                        {
-                        case KEY_UP:
-                                highlight--;
-                                if(highlight == -1) highlight = 0;
-                                break;
-                        case KEY_DOWN:
-                                highlight++;
-                                if(highlight == nummaps) highlight = nummaps - 1;
-                                break;
-                        case 'q':
-				stat2state = WAITING;
-				mvwprintw(statwin2,0,0,"%*s",xMax," ");
-				wnoutrefresh(statwin2);
-        		        highlight = 0;
-				touchwin(inputwin);
-				doupdate();
-                                break;
-                        default:
-                                break;
-                        }
-			if ( stat2state == WAITING ) break;
-                        if(c == ' ') break;
-                }
-		if ( stat2state == WAITING ) continue;
-                sprintf(templine,"changelevel %s",oldmaps[highlight]);
-                if (send_command(sock, templine, 1 , line)) {
-                    ec = -1;
-                    break;
-                }
-		stat2state = WAITING;
-		wnoutrefresh(changelevwin);
-		doupdate();
-		highlight = 0;
-		touchwin(inputwin);
+		highlight = displaylist (nummaps, oldmaps, 6, 10, yMax-1, xMax,statsellevelstr);
+		if ( highlight >= 0 ) {
+        	        sprintf(templine,"changelevel %s",oldmaps[highlight]);
+	                if (send_command(sock, templine, 1 , line)) {
+                	    ec = -1;
+        	            break;
+	                }
+		} else {
+		        stat2state = WAITING;
+                        touchwin(inputwin);
+                        doupdate();
+		}
+		continue;
 	}
 	if ( stat2state == SELUSER ) {
 		if ( iuser < 2 ) { stat2state = WAITING; continue; }
@@ -884,7 +932,6 @@ static int handle_status(int sock)
 	}
 	if ( stat2state == WAITING ) sleep(3);
     }
-
     clear();
     endwin();
 //   todo : free all of your mallocs
