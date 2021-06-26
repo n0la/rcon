@@ -133,10 +133,28 @@ void freeuserdata(UserDataStructure ** userdata) {
 
 int lastnonblank(char * str, int maxlen) {
    int i;
+   char c;
    if ( maxlen <= 0 ) return (0);
    if ( str == NULL ) return (0);
-   for (i=maxlen-1;i<0;i--) if ( *(str+i) != ' ' ) break;
-   return(i);
+   for (i=maxlen-1;i>0;i--) {
+	   c = str[i];
+	   if ( !isspace(c) ) return(i);
+   }
+   return(0);
+}
+
+int subnonprint(char * str) {
+   int i;
+   int strlenx;
+   char c;
+   if ( str == NULL ) return (0);
+   strlenx = strlen(str);
+   if ( strlenx == 0 ) return (0);
+   for (i=0;i<strlenx;i++) {
+           c = str[i];
+           if ( !isprint(c) ) str[i] = ':';
+   }
+   return(1);
 }
 
 int parseuser (char * userstring, UserDataStructure ** userdata) {
@@ -148,6 +166,9 @@ int parseuser (char * userstring, UserDataStructure ** userdata) {
    char *pingstr;
    char *adrstr;
    int i;
+   char tempstr[250];
+   char * tempstrp;
+   char * lastquote;
 
    if ( userstring == NULL ) return (1);
    if ( userdata == NULL ) return(2);
@@ -169,9 +190,15 @@ int parseuser (char * userstring, UserDataStructure ** userdata) {
    sscanf(pingstr,"%u",&(userq->ping));
    
    i = lastnonblank(namestr,20);
-   userq->name = (char *) malloc((size_t) (i+1) );
-   strncpy(userq->name,namestr,i);
-   *(userq->name+i) = '\000';
+   userq->name = (char *) malloc((size_t) (i+2) );
+   strncpy(tempstr,namestr,i+1);
+   tempstr[i+1] = '\000';
+   tempstrp = tempstr;
+   if ( *tempstrp == '"' ) tempstrp++;
+   lastquote = strrchr ( (const char *)tempstrp, '"' );
+   if ( lastquote != NULL ) *lastquote = '\000';
+   subnonprint(tempstrp);
+   strcpy(userq->name,tempstrp);
    
    i = lastnonblank(uniqueidstr,20);
    userq->uniqueid = (char *) malloc((size_t) (i+1) );
@@ -192,7 +219,7 @@ int parseuser (char * userstring, UserDataStructure ** userdata) {
    
 }
 
-int displaylist (int numitems, char ** itemlist, int ystart, int xstart, int ymax, int xmax, char* statstr) {
+int displaylist (int numitems, char ** itemlist, int ystart, int xstart, int ymax, int xmax, char* statstr, int qstate) {
 	int i;
 	int c = 0;
 	int maxnamelen = 0;
@@ -233,7 +260,7 @@ int displaylist (int numitems, char ** itemlist, int ystart, int xstart, int yma
 		numcols = ( numitems / numrows ) + 1;
 		if ( !(numitems%numrows) ) numcols--;
 	}
-        WINDOW * changelevwin = newwin(numrows+2,(maxnamelen+1)*numcols,ystart,xstart);
+        WINDOW * changelevwin = newwin(numrows+2,(maxnamelen+1)*numcols+1,ystart,xstart);
         keypad(changelevwin,true);
 //      set_escdelay(25);
         box(changelevwin,0,0);
@@ -263,23 +290,22 @@ int displaylist (int numitems, char ** itemlist, int ystart, int xstart, int yma
                         if(highlight == numitems) highlight = numitems - 1;
                         break;
                 case 'q':
-                        stat2state = WAITING;
+                        stat2state = qstate;
                         mvwprintw(statwin2, 0, 0,"%*s",xMax," ");
 			mvwprintw(statwin2, 0, 0, tempstrstat);
                         wnoutrefresh(statwin2);
-                        highlight = 0;
+                        highlight = -1;
                         touchwin(inputwin);
                         doupdate();
                         break;
                 default:
                         break;
                 }
-                if ( stat2state == WAITING ) break;
+                if ( stat2state == qstate ) break;
                 if(c == ' ') break;
         }
-        if ( stat2state == WAITING ) return(-15);
-        stat2state = WAITING;
-//        wnoutrefresh(changelevwin);
+        if ( stat2state == qstate ) return(-15);
+        stat2state = qstate;
         mvwprintw(statwin2, 0, 0,"%*s",xMax," ");
         mvwprintw(statwin2, 0, 0, tempstrstat);
         wnoutrefresh(statwin2);
@@ -652,6 +678,7 @@ static int handle_status(int sock)
     int lenoldstatusline = 0;
     char oldstatusline[MAXSTATLINLEN];
     char *oldusers[MAXUSERSP1];
+    char *tempoldusers[MAXUSERSP1];
     int ec = 0;
     time_t now;
     int i,j;
@@ -690,7 +717,6 @@ static int handle_status(int sock)
 	}
     }
     for (i=0;i<MAXUSERS;i++) oldusers[i] = (char *) calloc(1,1);
-//    for (i=0;i<MAXUSERS;i++) for(j=0;j<DIMUSERSTAT;j++) olduserdata[i][j] = (char *) calloc(1,1);
     statwin = newwin(1,xMax,0,0);
     wattron(statwin,emphasis);
     statwin2 = newwin(1,xMax,yMax-1,0);
@@ -786,7 +812,6 @@ static int handle_status(int sock)
 			mvwprintw(inputwin,icount,0,"%*s",xMax-1," ");
 			mvwprintw(inputwin,icount,0,"%s",templine);	
 		}
-//		mvwprintw(inputwin,icount,0,"%s\n",pch);
                 if (strlen(templine) != strlen(oldusers[iuser]) ) {
                         if ( oldusers[iuser] != NULL) free(oldusers[iuser]);
                         oldusers[iuser] = (char *) malloc(strlen(templine)+1);
@@ -797,7 +822,7 @@ static int handle_status(int sock)
                 }
                 strcpy(oldusers[iuser],templine);
 		parseuser (oldusers[iuser], &(users[iuser]));
-		iuser++;
+		if ( icount > 8 ) iuser++;
 		pch = strtok (NULL, "\n");
 		icount++;
 	}
@@ -814,7 +839,7 @@ static int handle_status(int sock)
 	if ( c == 'q' && stat2state == KICKBAN ) { stat2state = SELUSER; continue;}
 	if ( c == KEY_F(1) && stat2state == WAITING && iuser ) stat2state = SELUSER;
 	if ( c == KEY_F(2) && stat2state == WAITING ) stat2state = CHANGELEVEL;
-	if ( c == KEY_F(3) && stat2state == KICKBAN && highlight ) {
+	if ( c == KEY_F(3) && stat2state == KICKBAN && highlight >= 0 ) {
 		sprintf(templine,"kickid %u",(*(users+highlight))->userid);
 		if (send_command(sock, templine, 1 , line)) {
 	            ec = -1;
@@ -822,7 +847,7 @@ static int handle_status(int sock)
 	        }
 		stat2state = WAITING;
 	}
-	if ( c == KEY_F(4) && stat2state == KICKBAN && highlight ) {
+	if ( c == KEY_F(4) && stat2state == KICKBAN && highlight >= 0) {
 		sprintf(templine,"banid 0 %s kick",(*(users+highlight))->uniqueid);
 		if (send_command(sock, templine, 1 , line)) {
 	            ec = -1;
@@ -871,7 +896,7 @@ static int handle_status(int sock)
 			}
         	        pch = strtok (NULL, "\n");
 	        }
-		highlight = displaylist (nummaps, oldmaps, 6, 10, yMax-1, xMax,statsellevelstr);
+		highlight = displaylist (nummaps, oldmaps, 6, 10, yMax-1, xMax,statsellevelstr,WAITING);
 		if ( highlight >= 0 ) {
         	        sprintf(templine,"changelevel %s",oldmaps[highlight]);
 	                if (send_command(sock, templine, 1 , line)) {
@@ -886,49 +911,17 @@ static int handle_status(int sock)
 		continue;
 	}
 	if ( stat2state == SELUSER ) {
-		if ( iuser < 2 ) { stat2state = WAITING; continue; }
-                mvwprintw(statwin2,0,0,"%s"," ^v Arrows -> Highlight User, Space -> Select User, q -> Return (no selection)");
-		oldstat2state = stat2state;
-                wnoutrefresh(statwin2);
-                doupdate();
-		highlight = 1;
-		keypad(inputwin,true);
-		while(1)
-		{
-			for(i=1;i<=iuser;i++)
-			{
-				if(i==highlight) wattron(inputwin, A_REVERSE);
-				mvwprintw(inputwin,i+8,0,oldusers[i]);
-				wattroff(inputwin, A_REVERSE);
-				wrefresh(inputwin);
-			}
-			c = wgetch(inputwin);
-			switch(c)
-			{
-			case KEY_UP:
-				highlight--;
-				if(highlight == -1) highlight = 0;
-				break;
-			case KEY_DOWN:
-				highlight++;
-				if(highlight == iuser) highlight = iuser - 1;
-				break;
-                        case 'q':
-                                stat2state = WAITING;
-                                mvwprintw(statwin2,0,0,"%*s",xMax," ");
-                                wnoutrefresh(statwin2);
-                                highlight = 0;
-                                touchwin(inputwin);
-                                doupdate();
-                                break;
-			default:
-				break;
-			}
-                        if ( stat2state == WAITING ) break;
-                        if(c == ' ') break;
+		if ( iuser < 1 ) { stat2state = WAITING; continue; }
+		for (i=0;i<iuser;i++) tempoldusers[i] = (*(users+i))->name;
+		highlight = displaylist (iuser, tempoldusers, 9, 10, yMax-1, xMax,statseluserstr,WAITING);
+		if ( highlight >= 0 ) { 
+			stat2state = KICKBAN;
+		} else {
+                        stat2state = WAITING;
+                        touchwin(inputwin);
+                        doupdate();			
 		}
-		if ( stat2state == WAITING ) continue;
-		stat2state = KICKBAN;
+		continue;
 	}
 	if ( stat2state == WAITING ) sleep(3);
     }
