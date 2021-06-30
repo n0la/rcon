@@ -20,6 +20,16 @@
 #include <sys/socket.h>
 #include <netdb.h>
 #include <unistd.h>
+#include <arpa/inet.h>
+#include <time.h>
+#include <ncurses.h>
+
+#define DIMOLDSTAT	8
+#define MAXUSERS	64
+#define DIMUSERSTAT	6
+#define MAXLINLEN	10000
+#define MAXSTATLINLEN	500
+#define MAXUSERSP1	MAXUSERS+1
 
 static char *host = NULL;
 static char *password = NULL;
@@ -27,11 +37,282 @@ static char *port = NULL;
 static char *config = NULL;
 static char *server = NULL;
 static bool debug = false;
+static bool jstatus = false;
 static bool nowait = false;
 static bool minecraft = false;
+FILE *debugdev = NULL;
 
 static GByteArray *response = NULL;
 static src_rcon_t *r = NULL;
+
+int yMax,xMax;
+int ms_delay = 0;
+
+typedef struct userdata
+{
+	unsigned int		userid;
+	char *			name;
+	char *			uniqueid;
+	char *			connected;
+	unsigned int		ping;
+	char *			adr;
+} UserDataStructure;
+int numoui = 0;
+
+UserDataStructure * users[MAXUSERSP1];
+UserDataStructure * userp;
+UserDataStructure user;
+
+enum STAT2STATE {
+    INITIAL,
+    WAITING,
+    SELUSER,
+    KICKBAN,
+    CHANGELEVEL
+} stat2state = WAITING;
+
+WINDOW * statwin;
+WINDOW * statwin2;
+WINDOW * inputwin;
+
+/*
+    A_NORMAL        Normal display (no highlight)
+    A_STANDOUT      Best highlighting mode of the terminal.
+    A_UNDERLINE     Underlining
+    A_REVERSE       Reverse video
+    A_BLINK         Blinking
+    A_DIM           Half bright
+    A_BOLD          Extra bright or bold
+    A_PROTECT       Protected mode
+    A_INVIS         Invisible or blank mode
+    A_ALTCHARSET    Alternate character set
+    A_CHARTEXT      Bit-mask to extract a character
+    COLOR_PAIR(n)   Color-pair number n
+
+		COLOR_PAIR(n)
+        COLOR_BLACK   0
+        COLOR_RED     1
+        COLOR_GREEN   2
+        COLOR_YELLOW  3
+        COLOR_BLUE    4
+        COLOR_MAGENTA 5
+        COLOR_CYAN    6
+        COLOR_WHITE   7
+ */
+
+int start_ncurses()
+{
+    initscr();
+    cbreak(); // prevent line buffering, get chars as soon as typed
+    noecho(); // don't print chars to screen when typed
+    curs_set(FALSE); // hide cursor
+    timeout(ms_delay); // wait delay milliseconds for input
+//    set_escdelay(0); // delay to wait for second character of esc sequence
+    getmaxyx(stdscr, yMax, xMax); // use ncurses to get screen size
+	if(!has_colors()){
+		printw("Termional does not have colors");
+		getch();
+		return (-1);
+	}
+	start_color();
+	return (0);
+}
+
+void freeuserdata(UserDataStructure ** userdata) {
+   UserDataStructure * userq;
+   userq = *userdata;
+   if ( userq == NULL ) return;
+   if ( userq->name      != NULL ) free(userq->name);
+   if ( userq->uniqueid  != NULL ) free(userq->uniqueid);
+   if ( userq->connected != NULL ) free(userq->connected);
+   if ( userq->adr       != NULL ) free(userq->adr);
+   free(userq);
+   *userdata = NULL;
+   return;
+}
+
+int lastnonblank(char * str, int maxlen) {
+   int i;
+   char c;
+   if ( maxlen <= 0 ) return (0);
+   if ( str == NULL ) return (0);
+   for (i=maxlen-1;i>0;i--) {
+	   c = str[i];
+	   if ( !isspace(c) ) return(i);
+   }
+   return(0);
+}
+
+int subnonprint(char * str) {
+   int i;
+   int strlenx;
+   char c;
+   if ( str == NULL ) return (0);
+   strlenx = strlen(str);
+   if ( strlenx == 0 ) return (0);
+   for (i=0;i<strlenx;i++) {
+           c = str[i];
+           if ( !isprint(c) ) str[i] = ':';
+   }
+   return(1);
+}
+
+int parseuser (char * userstring, UserDataStructure ** userdata) {
+   UserDataStructure * userq;
+   char *idstr;
+   char *namestr;
+   char *uniqueidstr;
+   char *connectedstr;
+   char *pingstr;
+   char *adrstr;
+   int i;
+   char tempstr[250];
+   char * tempstrp;
+   char * lastquote;
+
+   if ( userstring == NULL ) return (1);
+   if ( userdata == NULL ) return(2);
+   freeuserdata(userdata);
+   *userdata = (UserDataStructure *) malloc(sizeof(UserDataStructure));
+   userq = *userdata;
+   
+//# userid name                uniqueid            connected ping  adr
+//01234567890123456789012345678901234567890123456789012345678901234567890
+//          1         2         3         4         5         6         7     
+
+   idstr = userstring + 2;
+   namestr = userstring + 9;
+   uniqueidstr = userstring + 29;
+   connectedstr = userstring + 49;
+   pingstr = userstring + 59;
+   adrstr = userstring + 65;
+   sscanf(idstr,"%u",&(userq->userid));
+   sscanf(pingstr,"%u",&(userq->ping));
+   
+   i = lastnonblank(namestr,20);
+   userq->name = (char *) malloc((size_t) (i+2) );
+   strncpy(tempstr,namestr,i+1);
+   tempstr[i+1] = '\000';
+   tempstrp = tempstr;
+   if ( *tempstrp == '"' ) tempstrp++;
+   lastquote = strrchr ( (const char *)tempstrp, '"' );
+   if ( lastquote != NULL ) *lastquote = '\000';
+   subnonprint(tempstrp);
+   strcpy(userq->name,tempstrp);
+   
+   i = lastnonblank(uniqueidstr,20);
+   userq->uniqueid = (char *) malloc((size_t) (i+1) );
+   strncpy(userq->uniqueid,uniqueidstr,i);
+   *(userq->uniqueid+i) = '\000';
+   
+   i = lastnonblank(connectedstr,20);
+   userq->connected = (char *) malloc((size_t) (i+1) );
+   strncpy(userq->connected,connectedstr,i);
+   *(userq->connected+i) = '\000';
+   
+   i = lastnonblank(adrstr,20);
+   userq->adr = (char *) malloc((size_t) (i+1) );
+   strncpy(userq->adr,adrstr,i);
+   *(userq->adr+i) = '\000';
+   
+   return(0);
+   
+}
+
+int displaylist (int numitems, char ** itemlist, int ystart, int xstart, int ymax, int xmax, char* statstr, int qstate) {
+	int i;
+	int c = 0;
+	int maxnamelen = 0;
+	int numrows;
+	int numcols;
+	int maxnumcols;
+	int highlight;
+	char tempstrstat[1000];
+	if (!numitems) return(-1);
+	if ( ystart < 0 ) return(-2);
+	if ( xstart < 0 ) return(-3);
+	if ( ymax < 0 ) return(-4);
+	if ( ymax < 0 ) return(-5);
+	if ( ystart > ymax-3 ) return(-6);
+	if ( xstart > xmax-2 ) return(-7);
+	if ( itemlist == NULL ) return(-8);
+	if ( *itemlist == NULL ) return(-9);
+	if ( numitems < 0 ) return(-10);
+	if ( numitems == 1 ) return(0);
+	for (i=0;i<numitems;i++) {
+		if ( itemlist[i] == NULL ) return(-11);
+		if ( strlen( itemlist[i] ) > maxnamelen ) maxnamelen = strlen( itemlist[i] );
+	}
+	if ((xmax-xstart-2)/(maxnamelen+1) <= 0 ) return(-12);
+	if ( numitems > ( (xmax-xstart-2)/(maxnamelen+1) * ( ymax-ystart-2 ) ) ) return(-14);
+	// looks good, let's go!
+	mvwinstr(statwin2, 0, 0, tempstrstat);
+        mvwprintw(statwin2,0,0,"%*s",xMax," ");
+        mvwprintw(statwin2,0,0,"%s",statstr);
+	wnoutrefresh(statwin2);
+        doupdate();
+	numrows = numitems;
+	numcols = 1;
+	if ( numrows > (ymax-ystart-2) ) {
+		numrows = ymax-ystart-2;
+		maxnumcols = (xmax-xstart-2)/(maxnamelen+1);
+		if (maxnumcols < 1 ) return(-16);
+		numcols = ( numitems / numrows ) + 1;
+		if ( !(numitems%numrows) ) numcols--;
+	}
+        WINDOW * changelevwin = newwin(numrows+2,(maxnamelen+1)*numcols+1,ystart,xstart);
+        keypad(changelevwin,true);
+//      set_escdelay(25);
+        box(changelevwin,0,0);
+        wtimeout(changelevwin,-1);
+        wnoutrefresh(changelevwin);
+        doupdate();
+        highlight = 0;
+        while(1)
+        {
+                for(i=0;i<numitems;i++)
+                {
+                        if(i==highlight) wattron(changelevwin, A_REVERSE);
+                        mvwprintw(changelevwin,(i%numrows)+1,( (i/numrows) * (maxnamelen+1) ) + 1,itemlist[i] );
+                        wattroff(changelevwin, A_REVERSE);
+                        wnoutrefresh(changelevwin);
+                        doupdate();
+                }
+                c = wgetch(changelevwin);
+                switch(c)
+                {
+                case KEY_UP:
+                        highlight--;
+                        if(highlight == -1) highlight = 0;
+                        break;
+                case KEY_DOWN:
+                        highlight++;
+                        if(highlight == numitems) highlight = numitems - 1;
+                        break;
+                case 'q':
+                        stat2state = qstate;
+                        mvwprintw(statwin2, 0, 0,"%*s",xMax," ");
+			mvwprintw(statwin2, 0, 0, tempstrstat);
+                        wnoutrefresh(statwin2);
+                        highlight = -1;
+                        touchwin(inputwin);
+                        doupdate();
+                        break;
+                default:
+                        break;
+                }
+                if ( stat2state == qstate ) break;
+                if(c == ' ') break;
+        }
+        if ( stat2state == qstate ) return(-15);
+        stat2state = qstate;
+        mvwprintw(statwin2, 0, 0,"%*s",xMax," ");
+        mvwprintw(statwin2, 0, 0, tempstrstat);
+        wnoutrefresh(statwin2);
+        doupdate();
+        touchwin(inputwin);
+        return(highlight);
+}
 
 static void cleanup(void)
 {
@@ -67,6 +348,7 @@ static void usage(void)
     puts(" -p, --port       Port or service");
     puts(" -s, --server     Use this server from config file");
     puts(" -1, --1packet    Unused, backward compability");
+    puts(" -j, --status     Continuously report status to stdout");
 }
 
 static int parse_args(int ac, char **av)
@@ -82,10 +364,11 @@ static int parse_args(int ac, char **av)
         { "port", required_argument, 0, 'p' },
         { "server", required_argument, 0, 's' },
         { "1packet", no_argument, 0, '1' },
+        { "status", no_argument, 0, 'j' },
         { NULL, 0, 0, 0 }
     };
 
-    static char const *optstr = "c:dH:hmnP:p:s:1";
+    static char const *optstr = "c:dH:hmnP:p:s:1j";
 
     int c = 0;
 
@@ -102,6 +385,7 @@ static int parse_args(int ac, char **av)
         case 'n': nowait = true; break;
         case '1': /* backward compability */ break;
         case 'h': usage(); exit(0); break;
+        case 'j': jstatus = true; break;
         default: /* intentional */
         case '?': usage(); exit(1); break;
         }
@@ -195,7 +479,7 @@ static int wait_auth(int sock, src_rcon_message_t *auth)
     return 1;
 }
 
-static int send_command(int sock, char const *cmd)
+static int send_command(int sock, char const *cmd, int typeout, char * reply)
 {
     src_rcon_message_t *command = NULL, *end = NULL;
     src_rcon_message_t **commandanswers = NULL;
@@ -263,12 +547,20 @@ static int send_command(int sock, char const *cmd)
                         done = true;
                     } else {
                         size_t bodylen = strlen((char const*)(*p)->body);
+			if (!typeout) {
 
-                        fprintf(stdout, "%s", (char const*)(*p)->body);
+                        	fprintf(stdout, "%s", (char const*)(*p)->body);
 
-                        if (bodylen > 0 && (*p)->body[bodylen-1] != '\n') {
-                            fprintf(stdout, "\n");
-                        }
+	                        if (bodylen > 0 && (*p)->body[bodylen-1] != '\n') {
+        	                    fprintf(stdout, "\n");
+                	        }
+			} else {
+                                sprintf(reply, "%s", (char const*)(*p)->body);
+
+                                if (bodylen > 0 && (*p)->body[bodylen-1] != '\n') {
+                                    sprintf(reply, "\n");
+                                }
+			}
 
                         /* in minecraft mode we are done after the first message
                          */
@@ -315,7 +607,7 @@ static int handle_arguments(int sock, int ac, char **av)
     }
     fclose(cmd);
 
-    if (send_command(sock, c)) {
+    if (send_command(sock, c, 0, NULL)) {
         free(c);
         return -1;
     }
@@ -349,13 +641,293 @@ static int handle_stdin(int sock)
             continue;
         }
 
-        if (send_command(sock, cmd)) {
+       /* line containing only "q"
+         */
+        if (strcmp(cmd,"q") == 0) {
+	    ec = 1;
+	    break;
+        }
+
+        if (send_command(sock, cmd, 0, NULL)) {
             ec = -1;
             break;
         }
     }
 
     free(line);
+
+    return ec;
+}
+
+static int num_common(char * str1, char * str2) {
+	int i;
+	int len1,len2;
+	len1 = strlen(str1);
+	len2 = strlen(str2);
+	if (len2 < len1) len1 = len2;
+	for (i=0;i<len1;i++) if ( *(str1+i) != *(str2+i) ) return (i);
+	return(len1);
+}
+
+static int handle_status(int sock)
+{
+    enum STAT2STATE oldstat2state = INITIAL;
+    char linestatus[] = "status";
+    char *oldstatlines[DIMOLDSTAT];
+    char *oldmaps[DIMOLDSTAT];
+    int lenoldstatusline = 0;
+    char oldstatusline[MAXSTATLINLEN];
+    char *oldusers[MAXUSERSP1];
+    char *tempoldusers[MAXUSERSP1];
+    int ec = 0;
+    time_t now;
+    int i,j;
+    char line[MAXLINLEN];
+    char templine[MAXLINLEN];
+    char statusline[MAXSTATLINLEN];
+    char * pch;
+    char * pch2;
+    int icount;
+    int nummaps = 0;
+    int maxmapnamelen = 0;
+    int iuser = 0;
+    int c;
+    int highlight = 0;
+    char * statmainstr     = " F1 -> Select User, F2 -> Change Level, q -> End Program";
+    char * statseluserstr  = " ^v Arrows -> Highlight User, Space -> Select User, q -> Return (no selection)";
+    char * statkickuserstr = " F3 -> Kick User, F4 -> Permantly Ban User, q -> Return (to select User)";
+    char * statsellevelstr = " ^v Arrows -> Highlight Level, Space -> Select Level, q -> Return (no selection)";
+    char *cmd = linestatus;
+    if(start_ncurses()) return -1;
+    init_pair(1,COLOR_RED, COLOR_WHITE);
+    attr_t emphasis = A_REVERSE | COLOR_PAIR(1);
+    for (i=0;i<xMax;i++) statusline[i] = ' ';
+    statusline[xMax] = '\000';
+    oldstatusline[0] = '\000';
+    for (i=0;i<DIMOLDSTAT;i++){
+	oldstatlines[i] = (char *) calloc(1,1);
+	if ( oldstatlines[i] == NULL ) {
+		fprintf(stderr,"calloc failed\n");
+		exit(2);
+	}
+	oldmaps[i] = (char *) calloc(1,1);
+	if ( oldmaps[i] == NULL ) {
+		fprintf(stderr,"calloc failed\n");
+		exit(3);
+	}
+    }
+    for (i=0;i<MAXUSERS;i++) oldusers[i] = (char *) calloc(1,1);
+    statwin = newwin(1,xMax,0,0);
+    wattron(statwin,emphasis);
+    statwin2 = newwin(1,xMax,yMax-1,0);
+    wattron(statwin2,emphasis);
+    inputwin = newwin(yMax-2, xMax,1, 1);
+    keypad(inputwin,true);
+    wtimeout(inputwin,0);
+    refresh();
+    int oldcount = 0;
+    while (1) {
+	/* initialize status lines */
+	if (!lenoldstatusline) {
+		for (i=0;i<xMax;i++) statusline[i] = ' ';
+		statusline[i+1] = '\000';
+		mvwprintw(statwin,0,0,statusline);
+		wnoutrefresh(statwin);
+	}
+	if (stat2state != oldstat2state) {
+		mvwprintw(statwin2,0,0,"%*s",xMax," ");
+		wnoutrefresh(statwin2);
+		switch(stat2state)
+		{
+		case WAITING:
+			mvwprintw(statwin2,0,0,"%s",statmainstr);
+			break;
+		case SELUSER:
+			mvwprintw(statwin2,0,0,"%s",statseluserstr);
+			break;
+		case KICKBAN:
+			mvwprintw(statwin2,0,0,"%s",statkickuserstr);
+			break;
+		case CHANGELEVEL:
+			mvwprintw(statwin2,0,0,"%s",statsellevelstr);
+			break;
+		default:
+			break;
+		}
+		wnoutrefresh(statwin2);
+		oldstat2state = stat2state;
+	}
+	/* print time hack */
+    	/* Obtain current time */
+    	time(&now);
+    	/* Convert to local time format and print to status line */
+	sprintf(statusline," %s", ctime(&now));
+	i = strlen(statusline);
+	statusline[i-1] = '\000';
+	j = num_common(statusline, oldstatusline);
+	mvwprintw(statwin,0,j,statusline+j);
+	wnoutrefresh(statwin);
+	lenoldstatusline = i;
+	strcpy( oldstatusline , statusline);
+	clearok(inputwin,false);
+
+        if (send_command(sock, cmd, 1 , line)) {
+            ec = -1;
+            break;
+        }
+	if (debug) {
+//	    rewind(debugdev);		// use when debugging this stuff only
+	    if (fwrite((const void*)line,(size_t)1,(size_t)(strlen(line)+1),debugdev) != (size_t)(strlen(line)+1) ) {
+		fprintf(stderr,"debug write to file failed!\n");
+		exit(1);
+	    }
+	}
+	pch = strtok (line,"\n");
+	icount = 0;
+	iuser = 0;
+	while (pch != NULL)
+	{
+		if (strcmp(pch,oldstatlines[icount])) mvwprintw(inputwin,icount,0,"%s",pch);
+		if (strlen(pch) != strlen(oldstatlines[icount]) ) {
+			if ( oldstatlines[icount] != NULL) free(oldstatlines[icount]);
+			oldstatlines[icount] = (char *) malloc(strlen(pch)+1);
+		        if ( oldstatlines[icount] == NULL ) {
+         			fprintf(stderr,"malloc failed\n");
+		                exit(2);
+		        }
+		}
+		strcpy(oldstatlines[icount],pch); 
+		pch = strtok (NULL, "\n");
+		if (++icount > 7 ) break;
+	}	
+	while (pch != NULL) {
+		strcpy(templine,pch);
+		strcpy(templine+64,templine+76);
+		if ( icount > 8 ) {
+			pch2=strrchr(templine,':');
+			if ( pch2 != NULL ) *pch2 = '\000';
+		}
+		if( strlen(templine) > xMax ) *(templine+xMax) = '\000';
+		if ( strcmp(templine,oldusers[iuser]) ) {
+			mvwprintw(inputwin,icount,0,"%*s",xMax-1," ");
+			mvwprintw(inputwin,icount,0,"%s",templine);	
+		}
+                if (strlen(templine) != strlen(oldusers[iuser]) ) {
+                        if ( oldusers[iuser] != NULL) free(oldusers[iuser]);
+                        oldusers[iuser] = (char *) malloc(strlen(templine)+1);
+                        if ( oldusers[iuser] == NULL ) {
+                                fprintf(stderr,"malloc failed\n");
+                                exit(2);
+                        }
+                }
+                strcpy(oldusers[iuser],templine);
+		parseuser (oldusers[iuser], &(users[iuser]));
+		if ( icount > 8 ) iuser++;
+		pch = strtok (NULL, "\n");
+		icount++;
+	}
+	if ( oldcount > icount ) for(i=icount;i<oldcount;i++) mvwprintw(inputwin,i,0,"%*s",xMax-1," ");
+	oldcount = icount;
+//	wrefresh(inputwin);
+	wnoutrefresh(inputwin);
+	doupdate();
+//	refresh();
+	c = wgetch(inputwin);
+	if ( c == 'q' && stat2state == WAITING ) break;
+	if ( c == 'q' && stat2state == CHANGELEVEL ) { stat2state = WAITING; continue;}
+	if ( c == 'q' && stat2state == SELUSER ) { stat2state = WAITING; continue;}
+	if ( c == 'q' && stat2state == KICKBAN ) { stat2state = SELUSER; continue;}
+	if ( c == KEY_F(1) && stat2state == WAITING && iuser ) stat2state = SELUSER;
+	if ( c == KEY_F(2) && stat2state == WAITING ) stat2state = CHANGELEVEL;
+	if ( c == KEY_F(3) && stat2state == KICKBAN && highlight >= 0 ) {
+		sprintf(templine,"kickid %u",(*(users+highlight))->userid);
+		if (send_command(sock, templine, 1 , line)) {
+	            ec = -1;
+        	    break;
+	        }
+		stat2state = WAITING;
+	}
+	if ( c == KEY_F(4) && stat2state == KICKBAN && highlight >= 0) {
+		sprintf(templine,"banid 0 %s kick",(*(users+highlight))->uniqueid);
+		if (send_command(sock, templine, 1 , line)) {
+	            ec = -1;
+        	    break;
+	        }
+                sprintf(templine,"writeid");
+                if (send_command(sock, templine, 1 , line)) {
+                    ec = -1;
+                    break;
+                }
+		stat2state = WAITING;
+	}
+	if ( stat2state == CHANGELEVEL ) {
+	        oldstat2state = stat2state;
+                sprintf(templine,"maps *");
+                if (send_command(sock, templine, 1 , line)) {
+                    ec = -1;
+                    break;
+                }
+	        if (debug) {
+        	    rewind(debugdev);
+	            if (fwrite((const void*)line,(size_t)1,(size_t)(strlen(line)+1),debugdev) != (size_t)(strlen(line)+1) ) {
+        	        fprintf(stderr,"debug write to file failed!\n");
+	                exit(1);
+        	    }
+	        }
+	        pch = strtok (line,"\n");
+	        nummaps = 0;
+		maxmapnamelen = 0;
+		i = 0;
+	        while (pch != NULL)
+	        {
+			i++;
+			if (i != 1) {
+		                if (strlen(pch+16) != strlen(oldmaps[nummaps]) ) {
+        		                if ( oldmaps[nummaps] != NULL) free(oldmaps[nummaps]);
+                		        oldmaps[nummaps] = (char *) malloc(strlen(pch+16)+1);
+	                	        if ( oldmaps[nummaps] == NULL ) {
+        	                	        fprintf(stderr,"malloc failed\n");
+	                	                exit(2);
+		                        }
+        		        }
+		                strcpy(oldmaps[nummaps],pch+16);
+				if (strlen(oldmaps[nummaps]) > maxmapnamelen) maxmapnamelen = strlen(oldmaps[nummaps]);
+	        	        nummaps++;
+			}
+        	        pch = strtok (NULL, "\n");
+	        }
+		highlight = displaylist (nummaps, oldmaps, 6, 10, yMax-1, xMax,statsellevelstr,WAITING);
+		if ( highlight >= 0 ) {
+        	        sprintf(templine,"changelevel %s",oldmaps[highlight]);
+	                if (send_command(sock, templine, 1 , line)) {
+                	    ec = -1;
+        	            break;
+	                }
+		} else {
+		        stat2state = WAITING;
+                        touchwin(inputwin);
+                        doupdate();
+		}
+		continue;
+	}
+	if ( stat2state == SELUSER ) {
+		if ( iuser < 1 ) { stat2state = WAITING; continue; }
+		for (i=0;i<iuser;i++) tempoldusers[i] = (*(users+i))->name;
+		highlight = displaylist (iuser, tempoldusers, 9, 10, yMax-1, xMax,statseluserstr,WAITING);
+		if ( highlight >= 0 ) { 
+			stat2state = KICKBAN;
+		} else {
+                        stat2state = WAITING;
+                        touchwin(inputwin);
+                        doupdate();			
+		}
+		continue;
+	}
+	if ( stat2state == WAITING ) sleep(3);
+    }
+    clear();
+    endwin();
+//   todo : free all of your mallocs
 
     return ec;
 }
@@ -404,11 +976,15 @@ int do_config(void)
 int main(int ac, char **av)
 {
     struct addrinfo *info = NULL, *ai = NULL, hint = {0};
+    struct sockaddr_in *addr;
     src_rcon_message_t *auth = NULL;
     src_rcon_message_t **authanswers = NULL;
     int sock = 0;
     int ret = 0;
     int ec = 3;
+    int i;
+
+    for (i=0;i<MAXUSERSP1;i++) users[MAXUSERSP1] = NULL;
 
 #ifdef HAVE_PLEDGE
     /* stdio = standard IO and send/recv
@@ -426,9 +1002,9 @@ int main(int ac, char **av)
     if (do_config()) {
         return 2;
     }
-    /* Now parse arguments *again*. This allows for overrides on the command
-     * line.
-     */
+    // Now parse arguments *again*. This allows for overrides on the command
+    // line.
+    //
     optind = 1;
     parse_args(ac, av);
 
@@ -436,14 +1012,28 @@ int main(int ac, char **av)
     ac -= optind;
     av += optind;
 
-    if (host == NULL || port == NULL) {
-        fprintf(stderr, "No host and/or port specified\n");
+    if (host == NULL) {
+        fprintf(stderr, "No host specified\n");
         return 1;
+    }
+
+    if (port == NULL) {
+        fprintf(stderr, "No port specified\n");
+        return 1;
+    }
+   
+    if (debug) {
+	debugdev = fopen("debug.txt","wb");
+	if(debugdev == NULL)
+	{
+	   fprintf(stderr,"Unable to open debug output file!\n");   
+	   exit(1);             
+	}
     }
 
     memset(&hint, 0, sizeof(hint));
     hint.ai_socktype = SOCK_STREAM;
-    hint.ai_family = AF_UNSPEC;
+    hint.ai_family = AF_INET;
     hint.ai_flags = AI_PASSIVE;
 
     if ((ret = getaddrinfo(host, port, &hint, &info))) {
@@ -456,25 +1046,31 @@ int main(int ac, char **av)
     for (ai = info; ai != NULL; ai = ai->ai_next ) {
         sock = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
         if (sock < 0) {
+	    printf ("Error opening socket: %s\n",strerror(errno));
             continue;
         }
 
+	addr = (struct sockaddr_in *)ai->ai_addr; 
+	printf("Connecting to: %s\n",inet_ntoa((struct in_addr)addr->sin_addr));
+
         if (connect(sock, ai->ai_addr, ai->ai_addrlen) == 0) {
             break;
-        }
+        } else {
+	    printf ("Error connecting to socket: %s\n",strerror(errno));
+	}
 
         close(sock);
         sock = -1;
     }
 
     if (sock < 0) {
-        fprintf(stderr, "Failed to connect to the given host/service\n");
+        fprintf(stderr, "Failed to connect to the given host/port\n");
         goto cleanup;
     }
 
 #ifdef HAVE_PLEDGE
-    /* Drop privileges further, since we are done socket()ing.
-     */
+    // Drop privileges further, since we are done socket()ing.
+    //
     if (pledge("stdio", NULL) == -1) {
         err(1, "pledge");
     }
@@ -483,11 +1079,11 @@ int main(int ac, char **av)
     response = g_byte_array_new();
     r = src_rcon_new();
 
-    /* Do we have a password?
-     */
+    // Do we have a password?
+    //
     if (password != NULL && strlen(password) > 0) {
-        /* Send auth request first
-         */
+        // Send auth request first
+        //
         auth = src_rcon_auth(r, password);
 
         if (send_message(sock, auth)) {
@@ -500,8 +1096,14 @@ int main(int ac, char **av)
         }
     }
 
+    printf ("Authorization successful...\n");
+
     if (ac > 0) {
         if (handle_arguments(sock, ac, av)) {
+            goto cleanup;
+        }
+    } else if (jstatus) { 
+        if (handle_status(sock)) {
             goto cleanup;
         }
     } else {
@@ -524,6 +1126,8 @@ cleanup:
     if (info) {
         freeaddrinfo(info);
     }
+
+    if (debug) fclose(debugdev);
 
     return ec;
 }
