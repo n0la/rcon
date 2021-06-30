@@ -151,6 +151,11 @@ Now you can do:
 $ rcon -s somehost status
 ```
 
+# Notable Forks
+
+[dad's variant](https://github.com/dad98253/rcon) is a fork of rcon that offers
+an ncurses interface. Perfect for running it in a local or remote shell.
+
 # See Also
 
 * [RCON Protocol Specification](https://developer.valvesoftware.com/wiki/Source_RCON_Protocol)
