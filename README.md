@@ -121,6 +121,11 @@ $ rcon -H somehost -p someport -P somepass < somescript.txt
 $ cat somescript.txt | rcon -H somehost -p someport -P somepass
 ```
 
+## Security Concerns
+
+Please note that the RCON protocol is not encrypted, meaning that your
+passwords are transmitted in plain text to the server.
+
 ## Exit Code
 
 The command exit with 0 on success, and some arbitrary non-zero exit code on
