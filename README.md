@@ -58,7 +58,7 @@ Just run the following command in the source code:
 $ dpkg-buildpackage -b -uc -us
 ```
 
-You will need the `dpkg-dev` package of course, which contains
+You will need the `dpkg-dev` and `debhelper` packages of course, which contain
 `dpkg-buildpackage`, and all the dependencies as they are listed in the manual
 installation section above.
 
